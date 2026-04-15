@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flower-vending-system"
+version = "0.1.0"
+description = "Production-oriented control platform for a flower vending machine."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [
+  { name = "Codex Architecture Baseline" },
+]
+dependencies = [
+  "pydantic>=2.8",
+  "PyYAML>=6.0.1",
+]
+
+[project.scripts]
+flower-vending = "flower_vending.runtime.cli:main"
+
+[project.optional-dependencies]
+ui = [
+  "PySide6>=6.8",
+]
+serial = [
+  "pyserial>=3.5",
+]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "mypy>=1.11",
+  "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flower_vending"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+pretty = true

@@ -1,0 +1,192 @@
+machine:
+  machine_id: flower-vending-windows-example
+  currency: RUB
+  startup_state: SELF_TEST
+  policies:
+    critical_temperature_celsius: 8.0
+    cash_session_timeout_s: 180.0
+    pickup_timeout_s: 60.0
+    exact_change_policy: block_cash_sale
+
+runtime:
+  startup_self_test: true
+  health_poll_interval_s: 0.5
+  validator_event_timeout_s: 0.05
+  watchdog_timeout_s: 30.0
+  event_log_limit: 100
+  persist_applied_config: true
+  seed_demo_data: true
+
+ui:
+  window_title: Flower Vending Kiosk
+  kiosk_fullscreen: true
+  show_simulator_controls: false
+  default_operator_id: technician
+
+catalog:
+  items:
+    - product_id: rose_red
+      slot_id: A1
+      name: rose_red
+      display_name: Red Roses
+      category: flowers
+      price_minor_units: 500
+      quantity: 4
+      capacity: 8
+      is_bouquet: false
+      enabled: true
+      temperature_profile: cooled
+      metadata: {}
+
+persistence:
+  sqlite_path: var/data/flower_vending.db
+  busy_timeout_ms: 5000
+  enable_wal: true
+  synchronous: FULL
+
+logging:
+  level: INFO
+  directory: var/log
+  filename: flower_vending.jsonl
+  json: true
+  stderr: true
+  rotation:
+    max_bytes: 10485760
+    backup_count: 7
+
+platform:
+  target_os: windows
+  kiosk_mode: true
+  autostart_mode: windows_service
+  watchdog:
+    enabled: true
+    adapter: windows_service_extension
+    timeout_s: 30.0
+    settings:
+      service_name: FlowerVendingWatchdog
+
+simulator:
+  enabled: false
+  startup_scenario:
+  scenario_suite: []
+  accepted_bill_denominations_minor: [100, 500, 1000]
+  quick_insert_bill_denominations_minor: [100, 500, 1000]
+  change_inventory:
+    100: 10
+    50: 10
+  initial_temperature_celsius: 4.0
+  initial_service_door_open: false
+  initial_inventory_presence: true
+  initial_inventory_confidence: 1.0
+  initial_faults: []
+
+devices:
+  bill_validator:
+    enabled: true
+    driver: dbv300sd
+    device_name: jcm_dbv300sd
+    transport_kind: serial
+    protocol_kind: serial
+    poll_interval_s: 0.2
+    startup_disable_acceptance: true
+    fallback_disable_on_fault: true
+    accepted_denominations_minor: [100, 500, 1000]
+    serial:
+      port: REQUIRES_HARDWARE_CONFIRMATION
+      baudrate: 9600
+      bytesize: 8
+      parity: N
+      stopbits: 1
+      read_timeout_s: 0.2
+      write_timeout_s: 0.2
+
+  change_dispenser:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: change_dispenser_main
+    mapping: payout_channel_main
+    timeouts_ms:
+      dispense: 15000
+      status: 1000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  motor_controller:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: carousel_motor_main
+    mapping: vend_motor_1
+    timeouts_ms:
+      vend: 10000
+      home: 10000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  cooling_controller:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: chamber_cooling_main
+    mapping: cooling_relay_1
+    timeouts_ms:
+      command: 1000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  window_controller:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: delivery_window_main
+    mapping: delivery_window_1
+    timeouts_ms:
+      open: 8000
+      close: 8000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  temperature_sensor:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: chamber_temperature_1
+    mapping: temperature_sensor_1
+    timeouts_ms:
+      read: 1000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  door_sensor:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: service_door_sensor_1
+    mapping: service_door_input
+    timeouts_ms:
+      read: 500
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  inventory_sensor:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: slot_inventory_sensor_1
+    mapping: slot_presence_bus
+    timeouts_ms:
+      read: 1000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true
+
+  position_sensor:
+    enabled: true
+    driver: requires_hardware_confirmation
+    device_name: carousel_position_sensor_1
+    mapping: position_sensor_bus
+    timeouts_ms:
+      read: 1000
+    settings:
+      transport: extension_point
+    requires_hardware_confirmation: true

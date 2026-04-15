@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Flower Vending Simulator
+Comment=Simulator kiosk for the flower vending system
+Exec=FlowerVendingSimulator
+Icon=flower-vending-simulator
+Categories=Utility;
+Terminal=false

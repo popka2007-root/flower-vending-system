@@ -1,0 +1,14 @@
+"""Product identity value object."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class ProductId:
+    value: str
+
+    def __post_init__(self) -> None:
+        if not self.value:
+            raise ValueError("product id must be non-empty")
