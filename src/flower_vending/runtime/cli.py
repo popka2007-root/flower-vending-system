@@ -87,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(default_config),
         help="Path to the YAML configuration file.",
     )
+    ui_parser.add_argument(
+        "--reset-state",
+        action="store_true",
+        help="Delete the simulator SQLite state database before launching the UI.",
+    )
 
     bench_parser = subparsers.add_parser(
         "dbv300sd-serial-smoke",
@@ -139,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "simulator-ui":
         from flower_vending.runtime.ui_runner import run_simulator_ui
 
-        return run_simulator_ui(config_path=args.config)
+        return run_simulator_ui(config_path=args.config, reset_state=args.reset_state)
     if args.command == "dbv300sd-serial-smoke":
         return asyncio.run(_command_dbv300sd_serial_smoke(args, parser))
     parser.error(f"unsupported command: {args.command}")

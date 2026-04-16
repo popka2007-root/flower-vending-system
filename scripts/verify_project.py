@@ -11,6 +11,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+CONFIG_MATRIX = (
+    "config/examples/machine.simulator.yaml",
+    "config/examples/machine.windows.yaml",
+    "config/examples/machine.linux.yaml",
+    "config/targets/machine.debian13-target.yaml",
+)
+CLI_HELP_COMMANDS = (
+    (),
+    ("validate-config",),
+    ("diagnostics",),
+    ("service",),
+    ("simulator-runtime",),
+    ("simulator-ui",),
+    ("dbv300sd-serial-smoke",),
+)
 
 
 def _prepare_import_path() -> None:
@@ -29,6 +44,35 @@ def _run_command(label: str, command: list[str]) -> bool:
         return True
     print(f"FAIL: {label} exited with {result.returncode}")
     return False
+
+
+def _run_config_matrix() -> bool:
+    success = True
+    print("\n== config validation matrix ==")
+    for config_path in CONFIG_MATRIX:
+        command = [
+            sys.executable,
+            "-m",
+            "flower_vending",
+            "validate-config",
+            "--config",
+            config_path,
+            "--json",
+        ]
+        success &= _run_command(f"validate {config_path}", command)
+    return success
+
+
+def _run_cli_help_smoke() -> bool:
+    success = True
+    print("\n== CLI help smoke checks ==")
+    for command_args in CLI_HELP_COMMANDS:
+        label = " ".join(("python -m flower_vending", *command_args, "--help"))
+        success &= _run_command(
+            label,
+            [sys.executable, "-m", "flower_vending", *command_args, "--help"],
+        )
+    return success
 
 
 async def _scenario_service_door_blocks_sale() -> None:
@@ -149,10 +193,12 @@ def main() -> int:
             "--prepare",
         ],
     )
+    checks_ok &= _run_config_matrix()
     checks_ok &= _run_command(
         "compile source and tests",
         [sys.executable, "-m", "compileall", "-q", "src", "tests"],
     )
+    checks_ok &= _run_cli_help_smoke()
     checks_ok &= _run_command(
         "repository hygiene check",
         [sys.executable, "scripts/check_repository_hygiene.py"],
