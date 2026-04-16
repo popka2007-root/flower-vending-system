@@ -6,9 +6,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from flower_vending.devices.contracts import DeviceCommandPolicy, DeviceFaultCode
 from flower_vending.devices.dbv300sd.config import (
     DBV300ProtocolKind,
-    DBV300SDValidatorConfig,
     DBV300TransportKind,
     SerialTransportSettings,
 )
@@ -20,9 +20,7 @@ class StrictModel(BaseModel):
 
 class MachinePoliciesConfig(StrictModel):
     critical_temperature_celsius: float = 8.0
-    cash_session_timeout_s: float = 180.0
     pickup_timeout_s: float = 60.0
-    exact_change_policy: Literal["block_cash_sale", "exact_change_only"] = "block_cash_sale"
 
 
 class MachineConfig(StrictModel):
@@ -69,10 +67,61 @@ class LoggingConfig(StrictModel):
     rotation: LogRotationConfig = Field(default_factory=LogRotationConfig)
 
 
+class DeviceCommandPolicyConfig(StrictModel):
+    timeout_s: float | None = 1.0
+    retry_count: int = 0
+    retryable_faults: tuple[str, ...] = (
+        DeviceFaultCode.COMMAND_TIMEOUT.value,
+        DeviceFaultCode.TRANSIENT_COMMAND_FAILURE.value,
+        DeviceFaultCode.COMMUNICATION_ERROR.value,
+    )
+    non_retryable_faults: tuple[str, ...] = (
+        DeviceFaultCode.AMBIGUOUS_PHYSICAL_RESULT.value,
+        DeviceFaultCode.PHYSICAL_STATE_MISMATCH.value,
+        DeviceFaultCode.RECONCILIATION_REQUIRED.value,
+        DeviceFaultCode.UNSUPPORTED_OPERATION.value,
+        DeviceFaultCode.CONFIGURATION_ERROR.value,
+    )
+    require_manual_review_on_ambiguous_result: bool = True
+
+    @field_validator("timeout_s")
+    @classmethod
+    def _timeout_positive(cls, value: float | None) -> float | None:
+        if value is not None and value <= 0:
+            raise ValueError("timeout_s must be positive when provided")
+        return value
+
+    @field_validator("retry_count")
+    @classmethod
+    def _retry_count_non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("retry_count must be non-negative")
+        return value
+
+    @field_validator("retryable_faults", "non_retryable_faults")
+    @classmethod
+    def _fault_codes_not_blank(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(value.strip() for value in values)
+        if any(not value for value in normalized):
+            raise ValueError("fault codes must not be blank")
+        return normalized
+
+    def to_runtime_policy(self) -> DeviceCommandPolicy:
+        return DeviceCommandPolicy(
+            timeout_s=self.timeout_s,
+            retry_count=self.retry_count,
+            retryable_faults=self.retryable_faults,
+            non_retryable_faults=self.non_retryable_faults,
+            require_manual_review_on_ambiguous_result=(
+                self.require_manual_review_on_ambiguous_result
+            ),
+        )
+
+
 class WatchdogRuntimeConfig(StrictModel):
     enabled: bool = True
     adapter: str = "requires_hardware_confirmation"
-    timeout_s: float = 30.0
+    policy: DeviceCommandPolicyConfig = Field(default_factory=DeviceCommandPolicyConfig)
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -84,7 +133,6 @@ class PlatformConfig(StrictModel):
 
 
 class RuntimeConfig(StrictModel):
-    startup_self_test: bool = True
     health_poll_interval_s: float = 0.5
     validator_event_timeout_s: float = 0.05
     watchdog_timeout_s: float = 30.0
@@ -96,10 +144,8 @@ class RuntimeConfig(StrictModel):
 class UiConfig(StrictModel):
     window_title: str = "Flower Vending Simulator"
     kiosk_fullscreen: bool = False
-    show_simulator_controls: bool = True
-    default_operator_id: str = "technician"
 
-    @field_validator("window_title", "default_operator_id")
+    @field_validator("window_title")
     @classmethod
     def _ui_values_not_blank(cls, value: str) -> str:
         normalized = value.strip()
@@ -134,35 +180,53 @@ class CatalogSeedItemConfig(StrictModel):
 def _default_catalog_items() -> tuple[CatalogSeedItemConfig, ...]:
     return (
         CatalogSeedItemConfig(
-            product_id="rose_red",
+            product_id="roses_ecuador_7",
             slot_id="A1",
-            name="rose_red",
-            display_name="Red Roses",
-            category="flowers",
-            price_minor_units=500,
+            name="roses_ecuador_7",
+            display_name="Розы Эквадор 7 шт.",
+            category="roses",
+            price_minor_units=249_000,
             quantity=4,
             capacity=8,
+            metadata={
+                "short_description": "Классические крупные розы в лаконичной упаковке.",
+                "image_path": "products/roses-ecuador-7.jpg",
+                "freshness_note": "Собран сегодня",
+                "size_label": "7 стеблей",
+            },
         ),
         CatalogSeedItemConfig(
-            product_id="tulip_white",
+            product_id="white_tulips_9",
             slot_id="A2",
-            name="tulip_white",
-            display_name="White Tulips",
-            category="flowers",
-            price_minor_units=450,
+            name="white_tulips_9",
+            display_name="Тюльпаны белые 9 шт.",
+            category="tulips",
+            price_minor_units=199_000,
             quantity=3,
             capacity=8,
+            metadata={
+                "short_description": "Светлый весенний букет для дома или комплимента.",
+                "image_path": "products/white-tulips-9.jpg",
+                "freshness_note": "Поставка утро",
+                "size_label": "9 стеблей",
+            },
         ),
         CatalogSeedItemConfig(
-            product_id="spring_bouquet",
+            product_id="gentle_mix",
             slot_id="B1",
-            name="spring_bouquet",
-            display_name="Spring Bouquet",
+            name="gentle_mix",
+            display_name="Нежный микс",
             category="bouquets",
-            price_minor_units=900,
-            quantity=2,
-            capacity=4,
+            price_minor_units=299_000,
+            quantity=3,
+            capacity=6,
             is_bouquet=True,
+            metadata={
+                "short_description": "Розы и сезонные цветы в мягкой пастельной гамме.",
+                "image_path": "products/gentle-mix.jpg",
+                "freshness_note": "Собран сегодня",
+                "size_label": "Средний букет",
+            },
         ),
     )
 
@@ -241,12 +305,14 @@ class BillValidatorConfig(StrictModel):
     enabled: bool = True
     driver: Literal["dbv300sd"] = "dbv300sd"
     device_name: str = "jcm_dbv300sd"
+    requires_hardware_confirmation: bool = True
     transport_kind: DBV300TransportKind = DBV300TransportKind.SERIAL
     protocol_kind: DBV300ProtocolKind = DBV300ProtocolKind.SERIAL
     poll_interval_s: float = 0.2
     startup_disable_acceptance: bool = True
     fallback_disable_on_fault: bool = True
     accepted_denominations_minor: tuple[int, ...] = ()
+    policy: DeviceCommandPolicyConfig = Field(default_factory=DeviceCommandPolicyConfig)
     serial: BillValidatorSerialConfig | None = None
 
     @model_validator(mode="after")
@@ -255,25 +321,13 @@ class BillValidatorConfig(StrictModel):
             raise ValueError("serial settings are required for serial transport")
         return self
 
-    def to_runtime_config(self) -> DBV300SDValidatorConfig:
-        return DBV300SDValidatorConfig(
-            device_name=self.device_name,
-            transport_kind=self.transport_kind,
-            protocol_kind=self.protocol_kind,
-            serial_transport=self.serial.to_runtime_settings() if self.serial else None,
-            poll_interval_s=self.poll_interval_s,
-            startup_disable_acceptance=self.startup_disable_acceptance,
-            fallback_disable_on_fault=self.fallback_disable_on_fault,
-            accepted_denominations_minor=self.accepted_denominations_minor,
-        )
-
-
 class GenericDeviceConfig(StrictModel):
     enabled: bool = True
     driver: str
     device_name: str
     mapping: str | None = None
     timeouts_ms: dict[str, int] = Field(default_factory=dict)
+    policy: DeviceCommandPolicyConfig = Field(default_factory=DeviceCommandPolicyConfig)
     settings: dict[str, Any] = Field(default_factory=dict)
     requires_hardware_confirmation: bool = True
 

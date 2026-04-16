@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from types import ModuleType
 from typing import Any
 
 from flower_vending.devices.dbv300sd.config import SerialTransportSettings
 from flower_vending.devices.dbv300sd.transport.base import DBV300Transport
 from flower_vending.devices.exceptions import ConfigurationError, DeviceNotStartedError, TransportIOError
 
+pyserial: ModuleType | None
 try:
     import serial as pyserial
 except ImportError:  # pragma: no cover - optional dependency
@@ -60,11 +62,12 @@ class SerialDBV300Transport(DBV300Transport):
             ) from exc
 
     async def close(self) -> None:
-        if not self.is_open:
+        port = self._port
+        if port is None or not getattr(port, "is_open", False):
             self._port = None
             return
         try:
-            await asyncio.to_thread(self._port.close)
+            await asyncio.to_thread(port.close)
         except Exception as exc:  # pragma: no cover - depends on host serial stack
             raise TransportIOError(f"failed to close serial transport: {exc}") from exc
         finally:

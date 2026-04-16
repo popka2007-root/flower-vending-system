@@ -9,7 +9,7 @@ from typing import Any, Literal
 from flower_vending.app import ApplicationCore, build_application_core
 from flower_vending.app.fsm import MachineState, StateTransitionRecord
 from flower_vending.app.services import InventoryService
-from flower_vending.domain.entities import MoneyInventory, Product, Slot
+from flower_vending.domain.entities import MoneyInventory, Product, Slot, Transaction
 from flower_vending.domain.events import DomainEvent
 from flower_vending.domain.exceptions import ManualInterventionRequiredError
 from flower_vending.domain.value_objects import Amount, Currency, ProductId, SlotId
@@ -46,7 +46,7 @@ from flower_vending.simulators.devices import (
     MockWindowController,
 )
 from flower_vending.simulators.faults import SimulatorFaultCode
-from flower_vending.simulators.scenarios.catalog import SCENARIO_REGISTRY, run_default_scenario_suite
+from flower_vending.simulators.scenarios.catalog import SCENARIO_REGISTRY
 from flower_vending.ui.facade import UiApplicationFacade
 
 
@@ -229,15 +229,20 @@ class SimulatorRuntimeEnvironment:
             "recent_events": [asdict(entry) for entry in diagnostics.recent_events],
         }
 
-    async def run_configured_scenarios(self) -> tuple[Any, ...]:
-        names = self.config.simulator.scenario_suite
-        if not names:
-            return ()
-        return await run_default_scenario_suite(names)
-
     async def _restore_runtime_state(self) -> None:
-        unresolved = self.repositories.transactions.list_unresolved()
+        unresolved_by_id = {
+            transaction.transaction_id.value: transaction
+            for transaction in self.repositories.transactions.list_unresolved()
+        }
+        for transaction_id in self.repositories.journal.unresolved_intent_transaction_ids():
+            if transaction_id in unresolved_by_id:
+                continue
+            transaction = self.repositories.transactions.get(transaction_id)
+            if transaction is not None:
+                unresolved_by_id[transaction_id] = transaction
+        unresolved = tuple(unresolved_by_id.values())
         self.core.transaction_coordinator.restore_transactions(unresolved)
+        intent_plans = await self.core.recovery_manager.detect_unresolved_intents("startup-recovery")
         if unresolved:
             active_transaction = unresolved[0]
             self.core.machine_status_service.set_active_transaction(active_transaction.transaction_id.value)
@@ -249,6 +254,20 @@ class SimulatorRuntimeEnvironment:
                 extra={
                     "transaction_ids": [item.transaction_id.value for item in unresolved],
                     "active_transaction_id": active_transaction.transaction_id.value,
+                },
+            )
+        if intent_plans:
+            for transaction in self.core.transaction_coordinator.unresolved_transactions():
+                self.repositories.transactions.save(transaction)
+            self.repositories.machine_status.save(
+                self.core.machine_status_service.runtime.status,
+                machine_id=self.config.machine.machine_id,
+            )
+            self.logger.warning(
+                "runtime_restored_unresolved_intents",
+                extra={
+                    "transaction_ids": [plan.transaction_id for plan in intent_plans],
+                    "actions": [plan.action for plan in intent_plans],
                 },
             )
 
@@ -264,10 +283,7 @@ class SimulatorRuntimeEnvironment:
             machine_id=self.config.machine.machine_id,
         )
         self.repositories.money_inventory.save(self.money_inventory)
-        active = self.core.transaction_coordinator.active()
-        if active is not None:
-            self.repositories.transactions.save(active)
-        for transaction in self.core.transaction_coordinator.unresolved_transactions():
+        for transaction in _transactions_to_persist(self.core):
             self.repositories.transactions.save(transaction)
 
 
@@ -293,10 +309,8 @@ class RuntimePersistenceProjector:
             if event.transaction_id is not None
             else self._core.transaction_coordinator.active()
         )
-        if transaction is not None:
-            self._repositories.transactions.save(transaction)
-        for unresolved in self._core.transaction_coordinator.unresolved_transactions():
-            self._repositories.transactions.save(unresolved)
+        for persisted in _transactions_to_persist(self._core, primary=transaction):
+            self._repositories.transactions.save(persisted)
         self._repositories.machine_status.save(
             self._core.machine_status_service.runtime.status,
             machine_id=self._config.machine.machine_id,
@@ -415,6 +429,14 @@ def validate_config_file(config_path: str | Path, *, prepare_directories: bool =
                     message=f"{device_name} is still an extension point that requires hardware confirmation.",
                 )
             )
+    if config.platform.watchdog.enabled and config.platform.watchdog.adapter != "simulator":
+        messages.append(
+            BootstrapMessage(
+                severity="warning",
+                code="hardware_confirmation_required",
+                message="watchdog is still an extension point that requires hardware confirmation.",
+            )
+        )
     if not config.simulator.enabled:
         messages.append(
             BootstrapMessage(
@@ -449,6 +471,21 @@ def resolve_runtime_path(project_root: Path, raw_path: str) -> Path:
     if candidate.is_absolute():
         return candidate
     return project_root / candidate
+
+
+def _transactions_to_persist(
+    core: ApplicationCore,
+    *,
+    primary: Transaction | None = None,
+) -> tuple[Transaction, ...]:
+    transactions: dict[str, Transaction] = {}
+    if primary is None:
+        primary = core.transaction_coordinator.active()
+    if primary is not None:
+        transactions[primary.transaction_id.value] = primary
+    for transaction in core.transaction_coordinator.unresolved_transactions():
+        transactions[transaction.transaction_id.value] = transaction
+    return tuple(transactions.values())
 
 
 async def build_simulator_environment(
@@ -507,7 +544,7 @@ async def build_simulator_environment(
     )
     inventory_service = _load_inventory_service(repositories)
     money_inventory = _load_money_inventory(repositories, config)
-    devices = _build_simulator_devices(config, money_inventory, default_slot_id=config.catalog.items[0].slot_id)
+    devices = _build_simulator_devices(config, money_inventory)
     _apply_initial_faults(config.simulator.initial_faults, devices)
 
     core = build_application_core(
@@ -527,6 +564,8 @@ async def build_simulator_environment(
         health_poll_interval_s=config.runtime.health_poll_interval_s,
         validator_event_timeout_s=config.runtime.validator_event_timeout_s,
         watchdog_timeout_s=config.runtime.watchdog_timeout_s,
+        pickup_timeout_s=config.machine.policies.pickup_timeout_s,
+        journal=repositories.journal,
     )
     event_store = RecentEventStore(limit=config.runtime.event_log_limit)
     projector = RuntimePersistenceProjector(
@@ -536,8 +575,8 @@ async def build_simulator_environment(
         money_inventory=money_inventory,
         logger=logger,
     )
-    core.event_bus.subscribe("*", event_store.handle)
-    core.event_bus.subscribe("*", projector.handle_domain_event)
+    core.event_bus.subscribe_best_effort("*", event_store.handle)
+    core.event_bus.subscribe_critical("*", projector.handle_domain_event)
     core.fsm.subscribe(projector.handle_transition)
 
     simulator_controls = SimulatorControlService(
@@ -588,11 +627,24 @@ def _seed_catalog(
     if not enabled:
         return
     existing_products = repositories.products.list_all()
-    if existing_products:
+    if existing_products and not _should_replace_demo_catalog(existing_products):
         return
+    if existing_products:
+        repositories.slots.delete_all()
+        repositories.products.delete_all()
     for item in items:
         repositories.products.save(_seed_product(item, currency_code=currency_code))
         repositories.slots.save(_seed_slot(item))
+
+
+def _should_replace_demo_catalog(existing_products: tuple[Product, ...]) -> bool:
+    legacy_ids = {"rose_red", "tulip_white", "spring_bouquet"}
+    existing_ids = {product.product_id.value for product in existing_products}
+    if existing_ids == legacy_ids:
+        return True
+    if any(product.display_name in {"Red Roses", "White Tulips", "Spring Bouquet"} for product in existing_products):
+        return True
+    return False
 
 
 def _load_inventory_service(repositories: RuntimeRepositories) -> InventoryService:
@@ -643,37 +695,59 @@ def _seed_slot(item: CatalogSeedItemConfig) -> Slot:
 def _build_simulator_devices(
     config: AppConfig,
     money_inventory: MoneyInventory,
-    *,
-    default_slot_id: str,
 ) -> SimulatorDevices:
-    _ = default_slot_id
     return SimulatorDevices(
         validator=MockBillValidator(
+            name=config.devices.bill_validator.device_name,
             supported_bill_values=config.simulator.accepted_bill_denominations_minor,
+            command_policy=config.devices.bill_validator.policy.to_runtime_policy(),
         ),
         change_dispenser=MockChangeDispenser(
+            name=config.devices.change_dispenser.device_name,
             inventory=dict(money_inventory.accounting_counts_by_denomination),
+            command_policy=config.devices.change_dispenser.policy.to_runtime_policy(),
         ),
-        motor_controller=MockMotorController(),
-        cooling_controller=MockCoolingController(),
-        window_controller=MockWindowController(),
+        motor_controller=MockMotorController(
+            name=config.devices.motor_controller.device_name,
+            command_policy=config.devices.motor_controller.policy.to_runtime_policy(),
+        ),
+        cooling_controller=MockCoolingController(
+            name=config.devices.cooling_controller.device_name,
+            command_policy=config.devices.cooling_controller.policy.to_runtime_policy(),
+        ),
+        window_controller=MockWindowController(
+            name=config.devices.window_controller.device_name,
+            command_policy=config.devices.window_controller.policy.to_runtime_policy(),
+        ),
         temperature_sensor=MockTemperatureSensor(
+            name=config.devices.temperature_sensor.device_name,
             celsius=config.simulator.initial_temperature_celsius,
+            command_policy=config.devices.temperature_sensor.policy.to_runtime_policy(),
         ),
         door_sensor=MockDoorSensor(
+            name=config.devices.door_sensor.device_name,
             is_open=config.simulator.initial_service_door_open,
+            command_policy=config.devices.door_sensor.policy.to_runtime_policy(),
         ),
         inventory_sensor=MockInventorySensor(
+            name=config.devices.inventory_sensor.device_name,
             slot_states={
                 item.slot_id: (
                     config.simulator.initial_inventory_presence,
                     config.simulator.initial_inventory_confidence,
                 )
                 for item in config.catalog.items
-            }
+            },
+            command_policy=config.devices.inventory_sensor.policy.to_runtime_policy(),
         ),
-        position_sensor=MockPositionSensor(),
-        watchdog=MockWatchdogAdapter(),
+        position_sensor=MockPositionSensor(
+            name=config.devices.position_sensor.device_name,
+            command_policy=config.devices.position_sensor.policy.to_runtime_policy(),
+        ),
+        watchdog=MockWatchdogAdapter(
+            name=config.platform.watchdog.adapter,
+            command_policy=config.platform.watchdog.policy.to_runtime_policy(),
+        ),
     )
 
 

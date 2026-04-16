@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flower_vending.app.event_bus import EventBus
 from flower_vending.app.fsm import MachineState, StateMachineEngine
+from flower_vending.app.journal import ApplicationJournal, JournalOutcome, NoopApplicationJournal
 from flower_vending.app.orchestrators.transaction_coordinator import TransactionCoordinator
 from flower_vending.app.services.machine_status_service import MachineStatusService
 from flower_vending.devices.contracts import BillValidatorEvent, BillValidatorEventType
@@ -26,6 +27,7 @@ class PaymentCoordinator:
         event_bus: EventBus,
         fsm: StateMachineEngine,
         machine_status_service: MachineStatusService,
+        journal: ApplicationJournal | None = None,
     ) -> None:
         self._validator = validator
         self._change_manager = change_manager
@@ -33,6 +35,7 @@ class PaymentCoordinator:
         self._event_bus = event_bus
         self._fsm = fsm
         self._machine_status_service = machine_status_service
+        self._journal = journal or NoopApplicationJournal()
 
     async def start_cash_session(self, transaction_id: str, correlation_id: str) -> Transaction:
         self._machine_status_service.ensure_sales_allowed()
@@ -58,6 +61,11 @@ class PaymentCoordinator:
         session = PurchaseTransactionAggregate(transaction).start_cash_session()
         self._fsm.transition(MachineState.ACCEPTING_CASH, "cash_session_started")
         self._machine_status_service.set_machine_state(self._fsm.current_state)
+        self._record_intent(
+            transaction,
+            action_name="acceptance_enable_requested",
+            logical_step="start_cash_session.enable_acceptance",
+        )
         try:
             await self._validator.enable_acceptance(correlation_id=correlation_id)
         except Exception as exc:
@@ -65,7 +73,20 @@ class PaymentCoordinator:
             self._machine_status_service.block_sales("validator_fault")
             self._fsm.transition(MachineState.FAULT, "validator_unavailable")
             self._machine_status_service.set_machine_state(self._fsm.current_state)
+            self._record_outcome(
+                transaction,
+                action_name="acceptance_enable_requested",
+                logical_step="start_cash_session.enable_acceptance",
+                outcome=JournalOutcome.AMBIGUOUS,
+                error=exc.__class__.__name__,
+            )
             raise ValidatorUnavailableError("validator could not be enabled") from exc
+        self._record_outcome(
+            transaction,
+            action_name="acceptance_enable_requested",
+            logical_step="start_cash_session.enable_acceptance",
+            outcome=JournalOutcome.SUCCEEDED,
+        )
         await self._event_bus.publish(
             payment_event(
                 "cash_session_started",
@@ -119,7 +140,30 @@ class PaymentCoordinator:
     async def complete_payment(self, transaction_id: str) -> Transaction:
         transaction = self._transaction_coordinator.require(transaction_id)
         transaction.confirm_payment()
-        await self._validator.disable_acceptance(correlation_id=transaction.correlation_id.value)
+        self._record_intent(
+            transaction,
+            action_name="acceptance_disable_requested",
+            logical_step="complete_payment.disable_acceptance",
+        )
+        try:
+            await self._validator.disable_acceptance(correlation_id=transaction.correlation_id.value)
+        except Exception as exc:
+            transaction.mark_ambiguous()
+            self._enter_recovery_pending("validator_disable_recovery_required")
+            self._record_outcome(
+                transaction,
+                action_name="acceptance_disable_requested",
+                logical_step="complete_payment.disable_acceptance",
+                outcome=JournalOutcome.AMBIGUOUS,
+                error=exc.__class__.__name__,
+            )
+            raise
+        self._record_outcome(
+            transaction,
+            action_name="acceptance_disable_requested",
+            logical_step="complete_payment.disable_acceptance",
+            outcome=JournalOutcome.SUCCEEDED,
+        )
         self._fsm.transition(MachineState.PAYMENT_ACCEPTED, "payment_confirmed")
         self._machine_status_service.set_machine_state(self._fsm.current_state)
         await self._event_bus.publish(
@@ -137,6 +181,12 @@ class PaymentCoordinator:
                 transaction.mark_change_pending()
                 self._fsm.transition(MachineState.DISPENSING_CHANGE, "change_dispense_requested")
                 self._machine_status_service.set_machine_state(self._fsm.current_state)
+                self._record_intent(
+                    transaction,
+                    action_name="change_dispense_requested",
+                    logical_step="complete_payment.dispense_change",
+                    change_due_minor_units=transaction.change_due.minor_units,
+                )
                 await self._event_bus.publish(
                     payment_event(
                         "change_dispense_requested",
@@ -145,7 +195,24 @@ class PaymentCoordinator:
                         change_due_minor_units=transaction.change_due.minor_units,
                     )
                 )
-                await self._change_manager.dispense(transaction)
+                try:
+                    await self._change_manager.dispense(transaction)
+                except Exception as exc:
+                    self._record_outcome(
+                        transaction,
+                        action_name="change_dispense_requested",
+                        logical_step="complete_payment.dispense_change",
+                        outcome=JournalOutcome.AMBIGUOUS,
+                        error=exc.__class__.__name__,
+                    )
+                    raise
+                self._record_outcome(
+                    transaction,
+                    action_name="change_dispense_requested",
+                    logical_step="complete_payment.dispense_change",
+                    outcome=JournalOutcome.SUCCEEDED,
+                    change_due_minor_units=transaction.change_due.minor_units,
+                )
                 await self._event_bus.publish(
                     payment_event(
                         "change_dispensed",
@@ -171,7 +238,30 @@ class PaymentCoordinator:
 
     async def cancel_purchase(self, transaction_id: str, correlation_id: str) -> Transaction:
         transaction = self._transaction_coordinator.require(transaction_id)
-        await self._validator.disable_acceptance(correlation_id=correlation_id)
+        self._record_intent(
+            transaction,
+            action_name="acceptance_disable_requested",
+            logical_step="cancel_purchase.disable_acceptance",
+        )
+        try:
+            await self._validator.disable_acceptance(correlation_id=correlation_id)
+        except Exception as exc:
+            transaction.mark_ambiguous()
+            self._enter_recovery_pending("validator_disable_recovery_required")
+            self._record_outcome(
+                transaction,
+                action_name="acceptance_disable_requested",
+                logical_step="cancel_purchase.disable_acceptance",
+                outcome=JournalOutcome.AMBIGUOUS,
+                error=exc.__class__.__name__,
+            )
+            raise
+        self._record_outcome(
+            transaction,
+            action_name="acceptance_disable_requested",
+            logical_step="cancel_purchase.disable_acceptance",
+            outcome=JournalOutcome.SUCCEEDED,
+        )
         if (
             transaction.payment_status is not PaymentStatus.CONFIRMED
             and transaction.accepted_amount.minor_units > 0
@@ -206,6 +296,12 @@ class PaymentCoordinator:
                 refund_minor_units=transaction.accepted_amount.minor_units,
             )
         )
+        self._record_intent(
+            transaction,
+            action_name="refund_dispense_requested",
+            logical_step="cancel_purchase.dispense_refund",
+            refund_minor_units=transaction.accepted_amount.minor_units,
+        )
         try:
             await self._change_manager.dispense_refund(
                 transaction_id=transaction.transaction_id.value,
@@ -216,6 +312,13 @@ class PaymentCoordinator:
         except Exception:
             transaction.mark_ambiguous()
             self._enter_recovery_pending("refund_recovery_required")
+            self._record_outcome(
+                transaction,
+                action_name="refund_dispense_requested",
+                logical_step="cancel_purchase.dispense_refund",
+                outcome=JournalOutcome.AMBIGUOUS,
+                refund_minor_units=transaction.accepted_amount.minor_units,
+            )
             await self._event_bus.publish(
                 payment_event(
                     "refund_failed",
@@ -225,6 +328,13 @@ class PaymentCoordinator:
                 )
             )
             raise
+        self._record_outcome(
+            transaction,
+            action_name="refund_dispense_requested",
+            logical_step="cancel_purchase.dispense_refund",
+            outcome=JournalOutcome.SUCCEEDED,
+            refund_minor_units=transaction.accepted_amount.minor_units,
+        )
         await self._event_bus.publish(
             payment_event(
                 "refund_dispensed",
@@ -240,3 +350,41 @@ class PaymentCoordinator:
         else:
             self._fsm.force_state(MachineState.RECOVERY_PENDING, reason)
         self._machine_status_service.set_machine_state(self._fsm.current_state)
+
+    def _record_intent(
+        self,
+        transaction: Transaction,
+        *,
+        action_name: str,
+        logical_step: str,
+        **payload: object,
+    ) -> None:
+        self._journal.record_intent(
+            action_name=action_name,
+            correlation_id=transaction.correlation_id.value,
+            transaction_id=transaction.transaction_id.value,
+            logical_step=logical_step,
+            machine_state=self._fsm.current_state.value,
+            transaction_status=transaction.status.value,
+            payload=dict(payload),
+        )
+
+    def _record_outcome(
+        self,
+        transaction: Transaction,
+        *,
+        action_name: str,
+        logical_step: str,
+        outcome: JournalOutcome,
+        **payload: object,
+    ) -> None:
+        self._journal.record_outcome(
+            action_name=action_name,
+            outcome=outcome,
+            correlation_id=transaction.correlation_id.value,
+            transaction_id=transaction.transaction_id.value,
+            logical_step=logical_step,
+            machine_state=self._fsm.current_state.value,
+            transaction_status=transaction.status.value,
+            payload=dict(payload),
+        )

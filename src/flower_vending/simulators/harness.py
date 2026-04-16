@@ -10,6 +10,7 @@ from flower_vending.domain.commands.purchase_commands import AcceptCash, Confirm
 from flower_vending.domain.entities import MoneyInventory, Product, Slot
 from flower_vending.domain.value_objects import Amount, Currency, ProductId, SlotId
 from flower_vending.app.services import InventoryService
+from flower_vending.devices.interfaces import ManagedDevice
 from flower_vending.simulators.devices import (
     MockBillValidator,
     MockChangeDispenser,
@@ -58,6 +59,7 @@ class SimulationHarness:
         inventory_confidence: float = 1.0,
         temperature_celsius: float = 4.0,
         service_door_open: bool = False,
+        pickup_timeout_s: float = 60.0,
     ) -> "SimulationHarness":
         inventory_service = InventoryService()
         inventory_service.register_product(
@@ -94,7 +96,7 @@ class SimulationHarness:
         position_sensor = MockPositionSensor()
         watchdog = MockWatchdogAdapter()
 
-        devices = {
+        devices: dict[str, ManagedDevice] = {
             "validator": validator,
             "change_dispenser": change_dispenser,
             "motor": motor_controller,
@@ -118,9 +120,10 @@ class SimulationHarness:
             door_sensor=door_sensor,
             temperature_sensor=temperature_sensor,
             inventory_sensor=inventory_sensor,
+            pickup_timeout_s=pickup_timeout_s,
         )
         recorder = EventRecorder()
-        core.event_bus.subscribe("*", recorder.handle)
+        core.event_bus.subscribe_best_effort("*", recorder.handle)
 
         return cls(
             core=core,
@@ -237,7 +240,7 @@ class SimulationHarness:
         product = self.core.inventory_service.get_product(self.product_id)
         return product.price.minor_units
 
-    def _all_devices(self) -> list[object]:
+    def _all_devices(self) -> list[ManagedDevice]:
         return [
             self.validator,
             self.change_dispenser,

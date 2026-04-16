@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flower_vending.app.event_bus import EventBus
 from flower_vending.app.fsm import MachineState, StateMachineEngine
+from flower_vending.app.journal import ApplicationJournal, JournalOutcome, NoopApplicationJournal
 from flower_vending.app.orchestrators.payment_coordinator import PaymentCoordinator
 from flower_vending.app.orchestrators.transaction_coordinator import TransactionCoordinator
 from flower_vending.app.services.inventory_service import InventoryService
@@ -15,6 +16,7 @@ from flower_vending.domain.commands.purchase_commands import (
     ConfirmPickup,
     StartPurchase,
 )
+from flower_vending.domain.entities import Transaction
 from flower_vending.domain.events import DomainEvent
 from flower_vending.domain.events.payment_events import payment_event
 from flower_vending.domain.events.vending_events import vending_event
@@ -34,6 +36,7 @@ class VendingController:
         event_bus: EventBus,
         fsm: StateMachineEngine,
         machine_status_service: MachineStatusService,
+        journal: ApplicationJournal | None = None,
     ) -> None:
         self._inventory_service = inventory_service
         self._payment_coordinator = payment_coordinator
@@ -44,6 +47,7 @@ class VendingController:
         self._event_bus = event_bus
         self._fsm = fsm
         self._machine_status_service = machine_status_service
+        self._journal = journal or NoopApplicationJournal()
 
     async def start_purchase(self, command: StartPurchase) -> str:
         self._machine_status_service.ensure_sales_allowed()
@@ -102,7 +106,29 @@ class VendingController:
         transaction.confirm_pickup()
         self._fsm.transition(MachineState.CLOSING_DELIVERY_WINDOW, "pickup_confirmed")
         self._machine_status_service.set_machine_state(self._fsm.current_state)
-        await self._window_controller.close_window(correlation_id=command.correlation_id)
+        self._record_intent(
+            transaction,
+            action_name="window_close_requested",
+            logical_step="confirm_pickup.close_window",
+        )
+        try:
+            await self._window_controller.close_window(correlation_id=command.correlation_id)
+        except Exception as exc:
+            transaction.mark_faulted()
+            self._record_outcome(
+                transaction,
+                action_name="window_close_requested",
+                logical_step="confirm_pickup.close_window",
+                outcome=JournalOutcome.AMBIGUOUS,
+                error=exc.__class__.__name__,
+            )
+            raise
+        self._record_outcome(
+            transaction,
+            action_name="window_close_requested",
+            logical_step="confirm_pickup.close_window",
+            outcome=JournalOutcome.SUCCEEDED,
+        )
         transaction.mark_window_closed()
         self._fsm.transition(MachineState.COMPLETED, "delivery_window_closed")
         await self._event_bus.publish(
@@ -142,6 +168,12 @@ class VendingController:
                 slot_id=transaction.slot_id.value,
             )
         )
+        self._record_intent(
+            transaction,
+            action_name="motor_vend_requested",
+            logical_step="handle_vend_authorized.vend_motor",
+            slot_id=transaction.slot_id.value,
+        )
         try:
             await self._motor_controller.vend_slot(
                 slot_id=transaction.slot_id.value,
@@ -151,7 +183,21 @@ class VendingController:
             transaction.mark_faulted()
             self._fsm.transition(MachineState.FAULT, "motor_fault")
             self._machine_status_service.set_machine_state(self._fsm.current_state)
+            self._record_outcome(
+                transaction,
+                action_name="motor_vend_requested",
+                logical_step="handle_vend_authorized.vend_motor",
+                outcome=JournalOutcome.AMBIGUOUS,
+                slot_id=transaction.slot_id.value,
+            )
             raise
+        self._record_outcome(
+            transaction,
+            action_name="motor_vend_requested",
+            logical_step="handle_vend_authorized.vend_motor",
+            outcome=JournalOutcome.SUCCEEDED,
+            slot_id=transaction.slot_id.value,
+        )
         self._inventory_service.mark_vended(transaction.slot_id.value)
         transaction.mark_product_dispensed()
         await self._event_bus.publish(
@@ -164,13 +210,30 @@ class VendingController:
         )
         self._fsm.transition(MachineState.OPENING_DELIVERY_WINDOW, "product_dispensed")
         self._machine_status_service.set_machine_state(self._fsm.current_state)
+        self._record_intent(
+            transaction,
+            action_name="window_open_requested",
+            logical_step="handle_vend_authorized.open_window",
+        )
         try:
             await self._window_controller.open_window(correlation_id=transaction.correlation_id.value)
         except Exception:
             transaction.mark_faulted()
             self._fsm.transition(MachineState.FAULT, "delivery_window_fault")
             self._machine_status_service.set_machine_state(self._fsm.current_state)
+            self._record_outcome(
+                transaction,
+                action_name="window_open_requested",
+                logical_step="handle_vend_authorized.open_window",
+                outcome=JournalOutcome.AMBIGUOUS,
+            )
             raise
+        self._record_outcome(
+            transaction,
+            action_name="window_open_requested",
+            logical_step="handle_vend_authorized.open_window",
+            outcome=JournalOutcome.SUCCEEDED,
+        )
         transaction.mark_window_opened()
         self._fsm.transition(MachineState.WAITING_FOR_CUSTOMER_PICKUP, "delivery_window_opened")
         self._machine_status_service.set_machine_state(self._fsm.current_state)
@@ -180,4 +243,42 @@ class VendingController:
                 correlation_id=transaction.correlation_id.value,
                 transaction_id=transaction.transaction_id.value,
             )
+        )
+
+    def _record_intent(
+        self,
+        transaction: Transaction,
+        *,
+        action_name: str,
+        logical_step: str,
+        **payload: object,
+    ) -> None:
+        self._journal.record_intent(
+            action_name=action_name,
+            correlation_id=transaction.correlation_id.value,
+            transaction_id=transaction.transaction_id.value,
+            logical_step=logical_step,
+            machine_state=self._fsm.current_state.value,
+            transaction_status=transaction.status.value,
+            payload=dict(payload),
+        )
+
+    def _record_outcome(
+        self,
+        transaction: Transaction,
+        *,
+        action_name: str,
+        logical_step: str,
+        outcome: JournalOutcome,
+        **payload: object,
+    ) -> None:
+        self._journal.record_outcome(
+            action_name=action_name,
+            outcome=outcome,
+            correlation_id=transaction.correlation_id.value,
+            transaction_id=transaction.transaction_id.value,
+            logical_step=logical_step,
+            machine_state=self._fsm.current_state.value,
+            transaction_status=transaction.status.value,
+            payload=dict(payload),
         )

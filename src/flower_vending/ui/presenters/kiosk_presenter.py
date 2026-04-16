@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -81,7 +81,7 @@ class KioskPresenter:
 
     async def start_cash_checkout(self) -> ScreenRender:
         if self._session.selected_product_id is None or self._session.selected_slot_id is None:
-            return await self._show_error("Выбор не завершен", "Сначала выберите товар.")
+            return await self._show_error("Товар не выбран", "Сначала выберите товар в каталоге.")
         correlation_id = self._facade.new_correlation_id()
         try:
             transaction_id = await self._facade.start_cash_checkout(
@@ -177,7 +177,7 @@ class KioskPresenter:
                 correlation_id=correlation_id,
             )
         except FlowerVendingError as exc:
-            return await self._show_error("Симуляция купюры не выполнена", str(exc))
+            return await self._show_error("Купюра не принята", str(exc))
         return await self._emit_current_render()
 
     async def execute_service_action(self, action_id: str) -> ScreenRender:
@@ -188,11 +188,7 @@ class KioskPresenter:
                 correlation_id=correlation_id,
             )
         except FlowerVendingError as exc:
-            return await self._show_error("Simulator action failed", str(exc))
-        if action_id == "pickup_timeout_placeholder":
-            self._session.last_warning_message = (
-                "Pickup timeout остается placeholder и не закрывает окно выдачи автоматически."
-            )
+            return await self._show_error("Действие симулятора не выполнено", str(exc))
         return await self._emit_current_render()
 
     async def back(self) -> ScreenRender:
@@ -200,7 +196,7 @@ class KioskPresenter:
         return await self._emit_current_render()
 
     async def handle_action(self, action_id: str) -> ScreenRender:
-        handlers: dict[str, Callable[[], Any]] = {
+        handlers: dict[str, Callable[[], Awaitable[ScreenRender]]] = {
             "show_catalog": self.show_catalog,
             "show_home": self.show_home,
             "open_service": self.open_service_mode,
@@ -252,14 +248,16 @@ class KioskPresenter:
                 str(event.payload.get("reason", event.event_type)),
             )
             self._navigation.go_to(ScreenId.RESTRICTED)
-        elif event.event_type == "pickup_timeout_placeholder_requested":
+        elif event.event_type == "pickup_timeout_elapsed":
             self._session.record_restricted(
-                "pickup_timeout_placeholder",
-                str(event.payload.get("warning", "pickup timeout placeholder")),
+                "pickup_timeout",
+                "Время получения истекло; окно выдачи закрывается.",
             )
             self._navigation.go_to(ScreenId.RESTRICTED)
         elif event.event_type == "critical_temperature_detected":
-            self._session.last_warning_message = "Продажи остановлены из-за критической температуры."
+            self._session.last_warning_message = (
+                "Продажи остановлены из-за критической температуры."
+            )
             self._navigation.go_to(ScreenId.SALES_BLOCKED)
         elif event.event_type == "service_door_opened":
             self._session.last_warning_message = "Продажи остановлены: открыта сервисная дверь."
@@ -279,7 +277,12 @@ class KioskPresenter:
 
         if (
             machine.machine_state == "RECOVERY_PENDING" or "recovery_pending" in machine.sale_blockers
-        ) and screen_id not in {ScreenId.SERVICE, ScreenId.DIAGNOSTICS, ScreenId.ERROR, ScreenId.RESTRICTED}:
+        ) and screen_id not in {
+            ScreenId.SERVICE,
+            ScreenId.DIAGNOSTICS,
+            ScreenId.ERROR,
+            ScreenId.RESTRICTED,
+        }:
             screen_id = ScreenId.RESTRICTED
         elif machine.sale_blockers and screen_id not in {
             ScreenId.SERVICE,
@@ -292,12 +295,8 @@ class KioskPresenter:
             screen_id = ScreenId.EXACT_CHANGE
 
         if screen_id in {ScreenId.HOME, ScreenId.CATALOG}:
-            title = "Цветочный автомат" if screen_id is ScreenId.HOME else "Каталог"
-            subtitle = (
-                "Выберите свежие цветы или букет"
-                if screen_id is ScreenId.HOME
-                else "Доступные позиции"
-            )
+            title = "Цветочный автомат"
+            subtitle = "Выберите букет и оплатите наличными"
             model = self._catalog_presenter.present_catalog(
                 title=title,
                 subtitle=subtitle,
@@ -308,8 +307,11 @@ class KioskPresenter:
 
         if screen_id is ScreenId.PRODUCT_DETAILS:
             entry = self._selected_entry()
-            model = self._catalog_presenter.present_product_details(entry=entry, machine=machine)
-            return ScreenRender(screen_id, model)
+            product_details_model = self._catalog_presenter.present_product_details(
+                entry=entry,
+                machine=machine,
+            )
+            return ScreenRender(screen_id, product_details_model)
 
         if screen_id is ScreenId.PAYMENT:
             transaction = self._facade.active_transaction_snapshot()
@@ -321,25 +323,32 @@ class KioskPresenter:
                         message="Активная транзакция не найдена.",
                     ),
                 )
-            model = self._payment_presenter.present_payment(
+            payment_model = self._payment_presenter.present_payment(
                 transaction=transaction,
                 machine=machine,
                 quick_insert_denominations=self._facade.quick_insert_denominations(),
                 warning_message=self._session.last_warning_message,
             )
-            return ScreenRender(screen_id, model)
+            return ScreenRender(screen_id, payment_model)
 
         if screen_id is ScreenId.DISPENSING:
-            model = self._status_presenter.present_dispensing(
+            dispensing_model = self._status_presenter.present_dispensing(
                 product_name=self._session.selected_product_name or "товар",
             )
-            return ScreenRender(screen_id, model)
+            return ScreenRender(screen_id, dispensing_model)
 
         if screen_id is ScreenId.PICKUP:
-            model = self._status_presenter.present_pickup(
+            transaction = self._facade.active_transaction_snapshot()
+            pickup_model = self._status_presenter.present_pickup(
                 product_name=self._session.selected_product_name or "товар",
+                pickup_timeout_active=(
+                    False if transaction is None else transaction.pickup_timeout_active
+                ),
+                pickup_timeout_remaining_s=(
+                    None if transaction is None else transaction.pickup_timeout_remaining_s
+                ),
             )
-            return ScreenRender(screen_id, model)
+            return ScreenRender(screen_id, pickup_model)
 
         if screen_id is ScreenId.EXACT_CHANGE:
             return ScreenRender(screen_id, self._status_presenter.present_exact_change_only())
@@ -348,7 +357,8 @@ class KioskPresenter:
             return ScreenRender(
                 screen_id,
                 self._status_presenter.present_no_change(
-                    message=self._session.last_warning_message or "Сдача недоступна для безопасной продажи.",
+                    message=self._session.last_warning_message
+                    or "Сдача недоступна для безопасной продажи.",
                 ),
             )
 
@@ -382,7 +392,8 @@ class KioskPresenter:
             ScreenId.ERROR,
             self._status_presenter.present_error(
                 title=self._session.last_error_title or "Ошибка автомата",
-                message=self._session.last_error_message or "Произошла непредвиденная ошибка.",
+                message=self._session.last_error_message
+                or "Произошла непредвиденная ошибка.",
             ),
         )
 

@@ -4,12 +4,9 @@ machine:
   startup_state: SELF_TEST
   policies:
     critical_temperature_celsius: 8.0
-    cash_session_timeout_s: 180.0
     pickup_timeout_s: 60.0
-    exact_change_policy: block_cash_sale
 
 runtime:
-  startup_self_test: true
   health_poll_interval_s: 0.5
   validator_event_timeout_s: 0.05
   watchdog_timeout_s: 30.0
@@ -20,23 +17,25 @@ runtime:
 ui:
   window_title: Flower Vending Kiosk
   kiosk_fullscreen: true
-  show_simulator_controls: false
-  default_operator_id: technician
 
 catalog:
   items:
-    - product_id: rose_red
+    - product_id: roses_ecuador_7
       slot_id: A1
-      name: rose_red
-      display_name: Red Roses
-      category: flowers
-      price_minor_units: 500
+      name: roses_ecuador_7
+      display_name: Розы Эквадор 7 шт.
+      category: roses
+      price_minor_units: 249000
       quantity: 4
       capacity: 8
       is_bouquet: false
       enabled: true
       temperature_profile: cooled
-      metadata: {}
+      metadata:
+        short_description: Классические крупные розы в лаконичной упаковке.
+        image_path: products/roses-ecuador-7.jpg
+        freshness_note: Собран сегодня
+        size_label: 7 стеблей
 
 persistence:
   sqlite_path: /var/lib/flower-vending/flower_vending.db
@@ -61,7 +60,18 @@ platform:
   watchdog:
     enabled: true
     adapter: systemd_watchdog_extension
-    timeout_s: 30.0
+    policy:
+      timeout_s: 5.0
+      retry_count: 2
+      retryable_faults: [command_timeout, transient_command_failure, communication_error]
+      non_retryable_faults:
+        - ambiguous_physical_result
+        - physical_state_mismatch
+        - reconciliation_required
+        - unsupported_operation
+        - configuration_error
+        - hardware_confirmation_required
+      require_manual_review_on_ambiguous_result: true
     settings:
       unit_name: flower-vending.service
 
@@ -69,11 +79,14 @@ simulator:
   enabled: false
   startup_scenario:
   scenario_suite: []
-  accepted_bill_denominations_minor: [100, 500, 1000]
-  quick_insert_bill_denominations_minor: [100, 500, 1000]
+  accepted_bill_denominations_minor: [50000, 100000, 200000, 500000]
+  quick_insert_bill_denominations_minor: [50000, 100000, 200000, 500000]
   change_inventory:
-    100: 10
-    50: 10
+    100000: 10
+    50000: 10
+    10000: 20
+    5000: 20
+    1000: 50
   initial_temperature_celsius: 4.0
   initial_service_door_open: false
   initial_inventory_presence: true
@@ -90,7 +103,20 @@ devices:
     poll_interval_s: 0.2
     startup_disable_acceptance: true
     fallback_disable_on_fault: true
-    accepted_denominations_minor: [100, 500, 1000]
+    requires_hardware_confirmation: true
+    accepted_denominations_minor: [50000, 100000, 200000, 500000]
+    policy: &hardware_device_policy
+      timeout_s: 5.0
+      retry_count: 2
+      retryable_faults: [command_timeout, transient_command_failure, communication_error]
+      non_retryable_faults:
+        - ambiguous_physical_result
+        - physical_state_mismatch
+        - reconciliation_required
+        - unsupported_operation
+        - configuration_error
+        - hardware_confirmation_required
+      require_manual_review_on_ambiguous_result: true
     serial:
       port: REQUIRES_HARDWARE_CONFIRMATION
       baudrate: 9600
@@ -108,6 +134,7 @@ devices:
     timeouts_ms:
       dispense: 15000
       status: 1000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -120,6 +147,7 @@ devices:
     timeouts_ms:
       vend: 10000
       home: 10000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -131,6 +159,7 @@ devices:
     mapping: cooling_relay_1
     timeouts_ms:
       command: 1000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -143,6 +172,7 @@ devices:
     timeouts_ms:
       open: 8000
       close: 8000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -154,6 +184,7 @@ devices:
     mapping: temperature_sensor_1
     timeouts_ms:
       read: 1000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -165,6 +196,7 @@ devices:
     mapping: service_door_input
     timeouts_ms:
       read: 500
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -176,6 +208,7 @@ devices:
     mapping: slot_presence_bus
     timeouts_ms:
       read: 1000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true
@@ -187,6 +220,7 @@ devices:
     mapping: position_sensor_bus
     timeouts_ms:
       read: 1000
+    policy: *hardware_device_policy
     settings:
       transport: extension_point
     requires_hardware_confirmation: true

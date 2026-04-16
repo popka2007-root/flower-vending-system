@@ -27,25 +27,5 @@ class CancelPurchase(Command):
 
 
 @dataclass(frozen=True, slots=True)
-class CompletePayment(Command):
-    transaction_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class DispenseChange(Command):
-    transaction_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class DispenseProduct(Command):
-    transaction_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class OpenDeliveryWindow(Command):
-    transaction_id: str
-
-
-@dataclass(frozen=True, slots=True)
 class ConfirmPickup(Command):
     transaction_id: str

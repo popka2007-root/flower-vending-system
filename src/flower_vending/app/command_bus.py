@@ -3,21 +3,53 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import TypeVar, cast, overload
+
+from flower_vending.domain.commands import Command
+from flower_vending.domain.commands.purchase_commands import AcceptCash, CancelPurchase, ConfirmPickup, StartPurchase
+from flower_vending.domain.commands.recovery_commands import RecoverInterruptedTransaction
+from flower_vending.domain.commands.service_commands import EnterServiceMode
 
 
-CommandT = TypeVar("CommandT")
-CommandHandler = Callable[[Any], Awaitable[Any]]
+CommandT = TypeVar("CommandT", bound=Command)
+ResultT = TypeVar("ResultT")
+CommandHandler = Callable[[CommandT], Awaitable[ResultT]]
+ErasedCommandHandler = Callable[[Command], Awaitable[object]]
 
 
 class CommandBus:
     def __init__(self) -> None:
-        self._handlers: dict[type[Any], CommandHandler] = {}
+        self._handlers: dict[type[Command], ErasedCommandHandler] = {}
 
-    def register_handler(self, command_type: type[Any], handler: CommandHandler) -> None:
-        self._handlers[command_type] = handler
+    def register_handler(
+        self,
+        command_type: type[CommandT],
+        handler: CommandHandler[CommandT, ResultT],
+    ) -> None:
+        self._handlers[command_type] = cast(ErasedCommandHandler, handler)
 
-    async def dispatch(self, command: CommandT) -> Any:
+    @overload
+    async def dispatch(self, command: StartPurchase) -> str: ...
+
+    @overload
+    async def dispatch(self, command: AcceptCash) -> str: ...
+
+    @overload
+    async def dispatch(self, command: CancelPurchase) -> str: ...
+
+    @overload
+    async def dispatch(self, command: ConfirmPickup) -> str: ...
+
+    @overload
+    async def dispatch(self, command: EnterServiceMode) -> str: ...
+
+    @overload
+    async def dispatch(self, command: RecoverInterruptedTransaction) -> object: ...
+
+    @overload
+    async def dispatch(self, command: Command) -> object: ...
+
+    async def dispatch(self, command: Command) -> object:
         command_type = type(command)
         if command_type not in self._handlers:
             raise LookupError(f"no handler registered for command type {command_type.__name__}")

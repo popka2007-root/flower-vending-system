@@ -36,7 +36,7 @@ class PaymentSession:
         self.status = PaymentSessionStatus.ACCEPTING
         self.validator_enabled = True
 
-    def add_stacked_bill(self, bill_minor_units: int, currency: str = "RUB") -> None:
+    def add_stacked_bill(self, bill_minor_units: int) -> None:
         if self.status == PaymentSessionStatus.CANCELLED:
             raise PaymentCancelledError("payment session has been cancelled")
         self.accepted_bills.append(bill_minor_units)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from flower_vending.devices.contracts import DeviceCommandPolicy
 from flower_vending.devices.exceptions import ConfigurationError
 
 
@@ -49,6 +50,7 @@ class DBV300SDValidatorConfig:
     startup_disable_acceptance: bool = True
     fallback_disable_on_fault: bool = True
     accepted_denominations_minor: tuple[int, ...] = field(default_factory=tuple)
+    command_policy: DeviceCommandPolicy = field(default_factory=DeviceCommandPolicy)
 
     def __post_init__(self) -> None:
         if not self.device_name:

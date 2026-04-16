@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
 from flower_vending.app.event_bus import EventBus
@@ -17,7 +18,7 @@ class HealthMonitor:
     def __init__(
         self,
         *,
-        devices: dict[str, ManagedDevice],
+        devices: Mapping[str, ManagedDevice],
         machine_status_service: MachineStatusService,
         event_bus: EventBus,
         door_sensor: DoorSensor | None = None,

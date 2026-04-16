@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import shutil
-from pathlib import Path
 
 from flower_vending.runtime.paths import bundle_root, state_root
 from flower_vending.runtime.ui_runner import run_simulator_ui

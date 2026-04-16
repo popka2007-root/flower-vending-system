@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from flower_vending.app import ApplicationCore
 from flower_vending.app.fsm import MachineState
@@ -31,6 +32,7 @@ class CatalogEntry:
     quantity: int
     available: bool
     is_bouquet: bool
+    metadata: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +59,8 @@ class TransactionUiSnapshot:
     status: str
     payment_status: str
     payout_status: str
+    pickup_timeout_active: bool = False
+    pickup_timeout_remaining_s: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +95,7 @@ class UiApplicationFacade:
         self._platform_profile = platform_profile
 
     def subscribe_events(self, handler: EventListener) -> None:
-        self._core.event_bus.subscribe("*", handler)
+        self._core.event_bus.subscribe_best_effort("*", handler)
 
     def new_correlation_id(self) -> str:
         return CorrelationId.new().value
@@ -150,9 +154,6 @@ class UiApplicationFacade:
             unresolved_transaction_ids=unresolved_ids,
             recent_events=tuple() if self._event_store is None else self._event_store.snapshot(),
         )
-
-    def simulator_available(self) -> bool:
-        return self._simulator_controls is not None
 
     def quick_insert_denominations(self) -> tuple[int, ...]:
         if self._simulator_controls is None:
@@ -257,10 +258,14 @@ class UiApplicationFacade:
             quantity=slot.quantity,
             available=available,
             is_bouquet=product.is_bouquet,
+            metadata=dict(product.metadata),
         )
 
     def _transaction_snapshot(self, transaction: Transaction) -> TransactionUiSnapshot:
         product = self._core.inventory_service.get_product(transaction.product_id.value)
+        pickup_timeout_remaining_s = self._core.pickup_timeout_coordinator.remaining_seconds(
+            transaction.transaction_id.value
+        )
         return TransactionUiSnapshot(
             transaction_id=transaction.transaction_id.value,
             product_id=transaction.product_id.value,
@@ -273,4 +278,6 @@ class UiApplicationFacade:
             status=transaction.status.value,
             payment_status=transaction.payment_status.value,
             payout_status=transaction.payout_status.value,
+            pickup_timeout_active=pickup_timeout_remaining_s is not None,
+            pickup_timeout_remaining_s=pickup_timeout_remaining_s,
         )

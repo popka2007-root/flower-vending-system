@@ -11,11 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-TESTS = ROOT / "tests"
 
 
 def _prepare_import_path() -> None:
-    for path in (SRC, TESTS):
+    for path in (ROOT, SRC):
         path_text = str(path)
         if path_text not in sys.path:
             sys.path.insert(0, path_text)
@@ -33,7 +32,7 @@ def _run_command(label: str, command: list[str]) -> bool:
 
 
 async def _scenario_service_door_blocks_sale() -> None:
-    from _support import SimulationHarness
+    from tests._support import SimulationHarness
     from flower_vending.domain.exceptions import SaleBlockedError
 
     harness = SimulationHarness.build(service_door_open=True)
@@ -49,7 +48,7 @@ async def _scenario_service_door_blocks_sale() -> None:
 
 
 async def _scenario_validator_loop_processes_bill() -> None:
-    from _support import SimulationHarness
+    from tests._support import SimulationHarness
 
     harness = SimulationHarness.build()
     await harness.start()
@@ -68,7 +67,7 @@ async def _scenario_validator_loop_processes_bill() -> None:
 
 
 async def _scenario_multi_note_unsafe_change_is_blocked() -> None:
-    from _support import SimulationHarness
+    from tests._support import SimulationHarness
     from flower_vending.domain.exceptions import ChangeUnavailableError
 
     harness = SimulationHarness.build(
@@ -89,7 +88,7 @@ async def _scenario_multi_note_unsafe_change_is_blocked() -> None:
 
 
 async def _scenario_cancel_after_cash_refunds() -> None:
-    from _support import SimulationHarness
+    from tests._support import SimulationHarness
     from flower_vending.domain.commands.purchase_commands import CancelPurchase
 
     harness = SimulationHarness.build(
@@ -155,8 +154,12 @@ def main() -> int:
         [sys.executable, "-m", "compileall", "-q", "src", "tests"],
     )
     checks_ok &= _run_command(
-        "unit/integration/recovery tests",
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "tests", "-q"],
+        "UI smoke check",
+        [sys.executable, "scripts/ui_smoke_check.py"],
+    )
+    checks_ok &= _run_command(
+        "pytest test suite",
+        [sys.executable, "-m", "pytest", "-q"],
     )
     checks_ok &= _run_command(
         "diagnostics mode smoke test",

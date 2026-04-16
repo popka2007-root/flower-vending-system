@@ -37,7 +37,7 @@ SIMULATOR_ACTIONS: Final[tuple[str, ...]] = (
     "inject_inventory_mismatch",
     "restore_inventory_match",
     "clear_simulator_faults",
-    "pickup_timeout_placeholder",
+    "force_pickup_timeout_now",
 )
 
 
@@ -217,14 +217,11 @@ class SimulatorControlService:
             await self._announce_action(action_id, correlation_id)
             await self._poll_health(correlation_id)
             return
-        if action_id == "pickup_timeout_placeholder":
-            await self._core.event_bus.publish(
-                machine_event(
-                    "pickup_timeout_placeholder_requested",
-                    correlation_id=correlation_id,
-                    warning="pickup timeout automation is not implemented in the simulator-safe runtime",
-                )
+        if action_id == "force_pickup_timeout_now":
+            transaction_id = await self._core.pickup_timeout_coordinator.force_timeout_now(
+                correlation_id=correlation_id,
             )
+            await self._announce_action(action_id, correlation_id, transaction_id=transaction_id)
             return
         raise KeyError(f"unknown simulator action: {action_id}")
 
@@ -232,11 +229,17 @@ class SimulatorControlService:
         await self._announce_action("health_refresh_requested", correlation_id)
         await self._core.health_monitor.poll_once(correlation_id=correlation_id)
 
-    async def _announce_action(self, action_id: str, correlation_id: str) -> None:
+    async def _announce_action(
+        self,
+        action_id: str,
+        correlation_id: str,
+        **payload: object,
+    ) -> None:
         await self._core.event_bus.publish(
             machine_event(
                 "simulator_action_applied",
                 correlation_id=correlation_id,
                 action_id=action_id,
+                **payload,
             )
         )

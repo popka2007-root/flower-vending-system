@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import replace
 from typing import Final
 
+from flower_vending.devices.command_policy import DeviceCommandRunner
 from flower_vending.devices.contracts import (
     BillValidatorEvent,
     BillValidatorEventType,
@@ -60,6 +61,12 @@ class DBV300SDValidator(BillValidator):
         self._stop_requested = asyncio.Event()
         self._started = False
         self._acceptance_enabled = False
+        self._command_runner = DeviceCommandRunner(
+            device_name=config.device_name,
+            default_policy=config.command_policy,
+            activate_fault=self._activate_command_fault,
+            heartbeat=self._heartbeat,
+        )
         self._health = DeviceHealth(
             name=config.device_name,
             state=DeviceOperationalState.UNKNOWN,
@@ -128,24 +135,38 @@ class DBV300SDValidator(BillValidator):
 
     async def enable_acceptance(self, correlation_id: str | None = None) -> None:
         self._require_started()
-        await self._protocol.set_acceptance_enabled(self._transport, True)
-        self._acceptance_enabled = True
-        self._health = replace(
-            self._health,
-            state=DeviceOperationalState.READY,
-            last_heartbeat_at=utc_now(),
+
+        async def operation() -> None:
+            await self._protocol.set_acceptance_enabled(self._transport, True)
+            self._acceptance_enabled = True
+
+        await self._command_runner.run(
+            "enable_acceptance",
+            operation,
+            correlation_id=correlation_id,
+            idempotency_key=correlation_id,
         )
 
     async def disable_acceptance(self, correlation_id: str | None = None) -> None:
         self._require_started()
-        await self._protocol.set_acceptance_enabled(self._transport, False)
-        self._acceptance_enabled = False
-        await self._emit_event(
-            BillValidatorEvent(
-                event_type=BillValidatorEventType.VALIDATOR_DISABLED,
-                validator_name=self.name,
-                correlation_id=correlation_id,
+
+        async def operation() -> None:
+            await self._protocol.set_acceptance_enabled(self._transport, False)
+            self._acceptance_enabled = False
+            await self._emit_event(
+                BillValidatorEvent(
+                    event_type=BillValidatorEventType.VALIDATOR_DISABLED,
+                    validator_name=self.name,
+                    correlation_id=correlation_id,
+                )
             )
+
+        await self._command_runner.run(
+            "disable_acceptance",
+            operation,
+            correlation_id=correlation_id,
+            idempotency_key=correlation_id,
+            success_state=DeviceOperationalState.DISABLED,
         )
 
     async def accept_escrow(self, correlation_id: str | None = None) -> None:
@@ -154,7 +175,16 @@ class DBV300SDValidator(BillValidator):
             raise UnsupportedDeviceOperationError(
                 f"{self.name} protocol {self._protocol.name} does not confirm escrow support"
             )
-        await self._protocol.stack_escrow(self._transport)
+
+        async def operation() -> None:
+            await self._protocol.stack_escrow(self._transport)
+
+        await self._command_runner.run(
+            "accept_escrow",
+            operation,
+            correlation_id=correlation_id,
+            idempotency_key=correlation_id,
+        )
 
     async def return_escrow(self, correlation_id: str | None = None) -> None:
         self._require_started()
@@ -162,7 +192,16 @@ class DBV300SDValidator(BillValidator):
             raise UnsupportedDeviceOperationError(
                 f"{self.name} protocol {self._protocol.name} does not confirm escrow support"
             )
-        await self._protocol.return_escrow(self._transport)
+
+        async def operation() -> None:
+            await self._protocol.return_escrow(self._transport)
+
+        await self._command_runner.run(
+            "return_escrow",
+            operation,
+            correlation_id=correlation_id,
+            idempotency_key=correlation_id,
+        )
 
     async def read_event(self, timeout_s: float | None = None) -> BillValidatorEvent | None:
         if timeout_s is None:
@@ -249,6 +288,39 @@ class DBV300SDValidator(BillValidator):
             details={
                 "transport_kind": self._config.transport_kind.value,
                 "protocol_kind": self._config.protocol_kind.value,
+            },
+        )
+
+    def _activate_command_fault(
+        self,
+        code: str,
+        message: str,
+        *,
+        critical: bool = True,
+        **details: object,
+    ) -> None:
+        self._health = DeviceHealth(
+            name=self.name,
+            state=DeviceOperationalState.FAULT if critical else DeviceOperationalState.DEGRADED,
+            last_heartbeat_at=utc_now(),
+            faults=(DeviceFault(code=code, message=message, critical=critical, details=details),),
+            details={
+                "transport_kind": self._config.transport_kind.value,
+                "protocol_kind": self._config.protocol_kind.value,
+                **details,
+            },
+        )
+
+    def _heartbeat(self, *, state: DeviceOperationalState | None = None, **details: object) -> None:
+        self._health = DeviceHealth(
+            name=self.name,
+            state=state or self._health.state,
+            last_heartbeat_at=utc_now(),
+            faults=self._health.faults,
+            details={
+                "transport_kind": self._config.transport_kind.value,
+                "protocol_kind": self._config.protocol_kind.value,
+                **details,
             },
         )
 

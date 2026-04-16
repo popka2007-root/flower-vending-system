@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from flower_vending.devices.contracts import DeviceOperationalState
+from flower_vending.devices.contracts import DeviceCommandPolicy, DeviceOperationalState
 from flower_vending.devices.interfaces import CoolingController
 from flower_vending.simulators.devices.base import MockManagedDevice
 
 
 class MockCoolingController(MockManagedDevice, CoolingController):
-    def __init__(self, name: str = "mock_cooling_controller") -> None:
-        super().__init__(name)
+    def __init__(
+        self,
+        name: str = "mock_cooling_controller",
+        *,
+        command_policy: DeviceCommandPolicy | None = None,
+    ) -> None:
+        super().__init__(name, command_policy=command_policy)
         self.enabled = True
         self.target_celsius = 4.0
 

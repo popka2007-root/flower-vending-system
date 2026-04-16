@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from _support import ROOT, workspace_temp_dir
+from tests._support import ROOT, workspace_temp_dir
 
 from flower_vending.runtime.bootstrap import validate_config_file
 

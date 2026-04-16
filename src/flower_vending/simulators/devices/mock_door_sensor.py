@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from flower_vending.devices.contracts import DoorStatus
+from flower_vending.devices.contracts import DeviceCommandPolicy, DoorStatus
 from flower_vending.devices.interfaces import DoorSensor
 from flower_vending.simulators.devices.base import MockManagedDevice
 
 
 class MockDoorSensor(MockManagedDevice, DoorSensor):
-    def __init__(self, name: str = "mock_door_sensor", *, is_open: bool = False) -> None:
-        super().__init__(name)
+    def __init__(
+        self,
+        name: str = "mock_door_sensor",
+        *,
+        is_open: bool = False,
+        command_policy: DeviceCommandPolicy | None = None,
+    ) -> None:
+        super().__init__(name, command_policy=command_policy)
         self._is_open = is_open
 
     def set_open(self, is_open: bool) -> None:

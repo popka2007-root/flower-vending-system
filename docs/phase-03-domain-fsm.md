@@ -389,7 +389,9 @@ Checks whether a sale may start based on:
 - `delivery_window_open_requested`
 - `delivery_window_opened`
 - `pickup_confirmed`
-- `pickup_timeout`
+- `pickup_timeout_elapsed`
+- `pickup_timeout_window_closed`
+- `pickup_timeout_window_close_failed`
 - `delivery_window_close_requested`
 - `delivery_window_closed`
 
@@ -1037,7 +1039,7 @@ Power-loss recovery:
 Input events:
 
 - `pickup_confirmed`
-- `pickup_timeout`
+- `pickup_timeout_elapsed`
 - `service_door_opened`
 
 Allowed transitions:
@@ -1062,7 +1064,7 @@ Idempotency requirements:
 
 Rollback and recovery behavior:
 
-- timeout may still require close-window then transaction completion with warning or fault based on policy;
+- timeout closes the delivery window, then holds the transaction for recovery/manual review or enters fault if close fails;
 - if pickup cannot be confirmed but product is accessible, software must avoid duplicate vend.
 
 Prohibited actions:

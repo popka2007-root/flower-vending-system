@@ -7,6 +7,7 @@ import asyncio
 from flower_vending.devices.contracts import (
     BillValidatorEvent,
     BillValidatorEventType,
+    DeviceCommandPolicy,
     DeviceOperationalState,
     MoneyValue,
 )
@@ -23,8 +24,9 @@ class MockBillValidator(MockManagedDevice, BillValidator):
         *,
         supported_bill_values: tuple[int, ...] = (500, 1000, 2000, 5000),
         escrow_supported: bool = False,
+        command_policy: DeviceCommandPolicy | None = None,
     ) -> None:
-        super().__init__(name)
+        super().__init__(name, command_policy=command_policy)
         self._supported_bill_values = supported_bill_values
         self._escrow_supported = escrow_supported
         self._accepting = False
@@ -36,26 +38,60 @@ class MockBillValidator(MockManagedDevice, BillValidator):
     async def enable_acceptance(self, correlation_id: str | None = None) -> None:
         if not self._started:
             raise DeviceNotStartedError(f"{self.name} has not been started")
-        plan = self.injector.consume(SimulatorFaultCode.VALIDATOR_UNAVAILABLE)
-        if plan is not None:
-            self._activate_fault(
-                code=plan.code.value,
-                message=plan.message or "validator unavailable",
-                **plan.details,
+
+        async def operation() -> None:
+            await self._consume_policy_fault(
+                "enable_acceptance",
+                SimulatorFaultCode.COMMAND_TIMEOUT,
+                SimulatorFaultCode.TRANSIENT_COMMAND_FAILURE,
+                SimulatorFaultCode.AMBIGUOUS_PHYSICAL_RESULT,
+                correlation_id=correlation_id,
+                idempotency_key=correlation_id,
             )
-            raise DeviceAdapterError(plan.message or "validator unavailable")
-        self._accepting = True
-        self._heartbeat(state=DeviceOperationalState.READY, accepting=True)
+            plan = self.injector.consume(SimulatorFaultCode.VALIDATOR_UNAVAILABLE)
+            if plan is not None:
+                self._activate_fault(
+                    code=plan.code.value,
+                    message=plan.message or "validator unavailable",
+                    **plan.details,
+                )
+                raise DeviceAdapterError(plan.message or "validator unavailable")
+            self._accepting = True
+            self._heartbeat(state=DeviceOperationalState.READY, accepting=True)
+
+        await self._run_command(
+            "enable_acceptance",
+            operation,
+            correlation_id=correlation_id,
+            idempotency_key=correlation_id,
+        )
 
     async def disable_acceptance(self, correlation_id: str | None = None) -> None:
-        self._accepting = False
-        self._heartbeat(state=DeviceOperationalState.DISABLED, accepting=False)
-        await self._events.put(
-            BillValidatorEvent(
-                event_type=BillValidatorEventType.VALIDATOR_DISABLED,
-                validator_name=self.name,
+        async def operation() -> None:
+            await self._consume_policy_fault(
+                "disable_acceptance",
+                SimulatorFaultCode.COMMAND_TIMEOUT,
+                SimulatorFaultCode.TRANSIENT_COMMAND_FAILURE,
+                SimulatorFaultCode.AMBIGUOUS_PHYSICAL_RESULT,
                 correlation_id=correlation_id,
+                idempotency_key=correlation_id,
             )
+            self._accepting = False
+            self._heartbeat(state=DeviceOperationalState.DISABLED, accepting=False)
+            await self._events.put(
+                BillValidatorEvent(
+                    event_type=BillValidatorEventType.VALIDATOR_DISABLED,
+                    validator_name=self.name,
+                    correlation_id=correlation_id,
+                )
+            )
+
+        await self._run_command(
+            "disable_acceptance",
+            operation,
+            correlation_id=correlation_id,
+            idempotency_key=correlation_id,
+            success_state=DeviceOperationalState.DISABLED,
         )
 
     async def accept_escrow(self, correlation_id: str | None = None) -> None:

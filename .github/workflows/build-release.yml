@@ -13,7 +13,36 @@ permissions:
   contents: write
 
 jobs:
+  # Required release gate: simulator-safe checks only. Bench hardware checks for
+  # DBV-300-SD and other devices should live in a separate workflow once a stand exists.
+  quality-checks:
+    name: Simulator-safe quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install simulator-safe quality dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -r requirements-ui.txt
+      - name: Run required simulator-safe project verification
+        run: |
+          # Covers config validation, unit/integration/simulator tests, diagnostics, and runtime scenarios.
+          # Bench hardware validation will be added as a separate workflow when the stand exists.
+          python scripts/verify_project.py
+      - name: Run required ruff lint
+        run: python -m ruff check .
+      - name: Run non-blocking mypy baseline TODO
+        continue-on-error: true
+        run: |
+          # TODO: Make mypy a required release gate once the strict typing baseline is fixed.
+          python -m mypy src tests
+
   build-windows:
+    needs: quality-checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +66,7 @@ jobs:
           path: artifacts/*.exe
 
   build-linux:
+    needs: quality-checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

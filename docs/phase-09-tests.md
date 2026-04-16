@@ -101,11 +101,12 @@ Covered by:
 
 ### Pickup timeout
 
-Covered as a scaffold:
+Covered as executable integration tests:
 
-- one `expectedFailure` integration test documents that timer-driven pickup-timeout enforcement is still missing from the application core.
-
-This is intentional and honest. The test suite records the requirement without pretending the implementation already exists.
+- timeout closes the simulator delivery window and moves the transaction to recovery/manual review;
+- `confirm_pickup` cancels the armed timeout;
+- `window_controller.close_window` failure moves the machine to `FAULT`;
+- restart while waiting for customer pickup preserves the need to resume timeout/recovery.
 
 ### Reboot mid-transaction
 
@@ -147,9 +148,7 @@ The following verification completed successfully:
 
 Observed result:
 
-- 12 tests executed;
-- 11 passed;
-- 1 expected failure for pickup timeout policy.
+- pickup-timeout policy is now part of the passing integration suite.
 
 ## Assumptions
 
@@ -163,11 +162,10 @@ Observed result:
 - integration coverage for cash flow, cancellation, device faults, and health-based blocking
 - recovery coverage for reboot evidence and ambiguous payout assessment
 - recursive stdlib test discovery package layout
-- executable edge-case coverage for the requested scenarios except pickup timeout
+- executable edge-case coverage for the requested scenarios including pickup timeout
 
 ## Scaffolded
 
-- pickup-timeout enforcement test is present as `expectedFailure`
 - richer journal-replay integration directly through repository-backed bootstrap
 - UI presenter and Qt widget runtime tests
 - card-payment extension-path tests for future phases

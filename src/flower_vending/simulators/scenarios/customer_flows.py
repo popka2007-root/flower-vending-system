@@ -107,19 +107,20 @@ async def run_payment_cancelled_scenario() -> ScenarioResult:
         await harness.stop()
 
 
-async def run_pickup_timeout_placeholder_scenario() -> ScenarioResult:
-    harness = SimulationHarness.build()
+async def run_pickup_timeout_scenario() -> ScenarioResult:
+    harness = SimulationHarness.build(pickup_timeout_s=0.05)
     await harness.start()
     try:
-        transaction_id = await harness.start_purchase(correlation_id="pickup_timeout_placeholder")
-        await harness.accept_cash(transaction_id, correlation_id="pickup_timeout_placeholder")
-        await harness.insert_bill(500, correlation_id="pickup_timeout_placeholder")
+        transaction_id = await harness.start_purchase(correlation_id="pickup_timeout")
+        await harness.accept_cash(transaction_id, correlation_id="pickup_timeout")
+        await harness.insert_bill(500, correlation_id="pickup_timeout")
+        await harness.wait_for_runtime_processing(timeout_s=0.2)
         return harness.scenario_result(
-            scenario_name="pickup_timeout_placeholder",
-            success=True,
+            scenario_name="pickup_timeout",
+            success=harness.core.fsm.current_state.value == "RECOVERY_PENDING",
             notes=[
-                "pickup timeout automation is intentionally still a placeholder",
-                "runtime keeps the transaction waiting for explicit customer confirmation",
+                "pickup timeout elapsed and closed the delivery window",
+                "transaction is held for manual review after unconfirmed pickup",
             ],
         )
     finally:

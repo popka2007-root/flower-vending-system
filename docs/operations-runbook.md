@@ -23,7 +23,7 @@ confirmation:
 - motor/controller protocol details;
 - real watchdog deployment;
 - Windows/Linux kiosk lockdown and service installation;
-- automated pickup timeout closure beyond the explicit placeholder.
+- physical pickup/window sensors beyond the simulator-safe pickup timeout coordinator.
 
 ## 2. Clean-Machine Setup
 
@@ -159,7 +159,7 @@ Simulator-specific controls let you:
 - inject payout unavailable / partial payout;
 - inject motor fault;
 - inject inventory mismatch;
-- trigger the explicit pickup-timeout placeholder warning.
+- force pickup timeout now to close the delivery window and enter recovery/manual review.
 
 ## 7. Verification
 
@@ -221,7 +221,7 @@ If a simulator run stays blocked:
 - open diagnostics or service mode;
 - inspect `sale_blockers`;
 - clear injected faults or close the service door;
-- remember that pickup timeout is still a placeholder and does not auto-close the window.
+- use `force_pickup_timeout_now` in the simulator when you need to exercise timeout recovery immediately.
 
 If a non-simulator config looks runnable:
 

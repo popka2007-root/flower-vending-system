@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from _support import AsyncHarnessTestCase
+from tests._support import AsyncHarnessTestCase
 
 from flower_vending.devices.exceptions import DeviceAdapterError
 from flower_vending.domain.commands.purchase_commands import CancelPurchase

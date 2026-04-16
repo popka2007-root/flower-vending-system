@@ -24,6 +24,30 @@ class DeviceOperationalState(StrEnum):
     OUT_OF_SERVICE = "out_of_service"
 
 
+class DeviceFaultCode(StrEnum):
+    """Normalized fault taxonomy shared by simulators and hardware adapters."""
+
+    COMMAND_TIMEOUT = "command_timeout"
+    COMMAND_RETRY_EXHAUSTED = "command_retry_exhausted"
+    TRANSIENT_COMMAND_FAILURE = "transient_command_failure"
+    COMMUNICATION_ERROR = "communication_error"
+    PROTOCOL_ERROR = "protocol_error"
+    DEVICE_UNAVAILABLE = "device_unavailable"
+    HARDWARE_CONFIRMATION_REQUIRED = "hardware_confirmation_required"
+    AMBIGUOUS_PHYSICAL_RESULT = "ambiguous_physical_result"
+    PHYSICAL_STATE_MISMATCH = "physical_state_mismatch"
+    RECONCILIATION_REQUIRED = "reconciliation_required"
+    UNSUPPORTED_OPERATION = "unsupported_operation"
+    CONFIGURATION_ERROR = "configuration_error"
+
+
+class PhysicalReconciliationStatus(StrEnum):
+    NOT_APPLICABLE = "not_applicable"
+    CONFIRMED = "confirmed"
+    MISMATCH = "mismatch"
+    AMBIGUOUS = "ambiguous"
+
+
 class BillValidatorEventType(StrEnum):
     BILL_DETECTED = "bill_detected"
     BILL_VALIDATED = "bill_validated"
@@ -77,6 +101,51 @@ class DeviceHealth:
     last_heartbeat_at: datetime | None = None
     faults: tuple[DeviceFault, ...] = ()
     details: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceCommandPolicy:
+    timeout_s: float | None = 1.0
+    retry_count: int = 0
+    retryable_faults: tuple[str, ...] = (
+        DeviceFaultCode.COMMAND_TIMEOUT.value,
+        DeviceFaultCode.TRANSIENT_COMMAND_FAILURE.value,
+        DeviceFaultCode.COMMUNICATION_ERROR.value,
+    )
+    non_retryable_faults: tuple[str, ...] = (
+        DeviceFaultCode.AMBIGUOUS_PHYSICAL_RESULT.value,
+        DeviceFaultCode.PHYSICAL_STATE_MISMATCH.value,
+        DeviceFaultCode.RECONCILIATION_REQUIRED.value,
+        DeviceFaultCode.UNSUPPORTED_OPERATION.value,
+        DeviceFaultCode.CONFIGURATION_ERROR.value,
+    )
+    require_manual_review_on_ambiguous_result: bool = True
+
+    def __post_init__(self) -> None:
+        if self.timeout_s is not None and self.timeout_s <= 0:
+            raise ValueError("timeout_s must be positive when provided")
+        if self.retry_count < 0:
+            raise ValueError("retry_count must be non-negative")
+
+    def is_retryable(self, fault_code: str) -> bool:
+        if fault_code in self.non_retryable_faults:
+            return False
+        return fault_code in self.retryable_faults
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalStateReconciliation:
+    status: PhysicalReconciliationStatus = PhysicalReconciliationStatus.NOT_APPLICABLE
+    observed_state: Mapping[str, Any] = field(default_factory=dict)
+    expected_state: Mapping[str, Any] = field(default_factory=dict)
+    message: str | None = None
+
+    @property
+    def manual_review_required(self) -> bool:
+        return self.status in {
+            PhysicalReconciliationStatus.AMBIGUOUS,
+            PhysicalReconciliationStatus.MISMATCH,
+        }
 
 
 @dataclass(frozen=True, slots=True)

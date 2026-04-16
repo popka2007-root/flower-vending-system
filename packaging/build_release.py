@@ -127,6 +127,8 @@ def _run_pyinstaller(*, onefile: bool) -> Path:
         _data_arg(ROOT / "config", "config"),
         "--add-data",
         _data_arg(ROOT / "docs", "docs"),
+        "--add-data",
+        _data_arg(SRC / "flower_vending" / "ui" / "assets", "flower_vending/ui/assets"),
         "--windowed",
         str(SRC / "flower_vending" / "runtime" / "product_launcher.py"),
     ]

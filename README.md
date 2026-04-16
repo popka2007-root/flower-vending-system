@@ -16,6 +16,8 @@ without real hardware:
 Real hardware protocols are still intentionally **not claimed as complete**.
 DBV-300-SD framing/commands, payout hardware, motors, sensors, watchdogs, kiosk
 lockdown, services, and autostart remain extension points until bench-confirmed.
+See [Production Readiness Boundary](docs/production-readiness.md) for the
+simulator-ready, pilot-release-gate, and hardware-bench-required split.
 
 ## Quick Start
 
@@ -98,6 +100,7 @@ scripts\run-simulator-runtime.bat
 scripts\run-diagnostics.bat
 scripts\run-service-mode.bat
 scripts\run-simulator-ui.bat
+scripts\reset-demo-and-run-ui.bat
 ```
 
 Linux convenience scripts:
@@ -112,7 +115,7 @@ Linux convenience scripts:
 
 ## Verification
 
-Run the full verification helper:
+Run the project verification suite with one command:
 
 ```powershell
 python scripts\verify_project.py
@@ -122,7 +125,7 @@ This verifies:
 
 - config validation;
 - compile step;
-- unit/integration/recovery tests;
+- pytest-based unit/integration/recovery tests;
 - diagnostics mode smoke test;
 - focused runtime scenarios.
 
@@ -130,7 +133,7 @@ This verifies:
 
 The simulator UI and service mode support:
 
-- browse catalog and product cards;
+- browse a Russian demo catalog with storefront product cards and local flower images;
 - start cash checkout;
 - quick-insert bills from the payment screen;
 - open/close service door;
@@ -139,26 +142,42 @@ The simulator UI and service mode support:
 - trigger payout unavailable / partial payout;
 - trigger motor fault;
 - trigger inventory mismatch;
-- explicit pickup-timeout placeholder warning.
+- force pickup timeout now to close the delivery window and enter recovery/manual review.
 
 Recent domain events are visible in diagnostics, and runtime logs include FSM
 transitions plus correlation/transaction identifiers.
 
+The demo catalog in `config/examples/machine.simulator.yaml` uses local product
+assets from `src/flower_vending/ui/assets/products/`; release packaging includes
+these assets for Windows and Linux builds.
+
+If the simulator UI still shows an older persisted demo catalog from local
+runtime state, use `scripts\reset-demo-and-run-ui.bat` to clear the simulator
+database and launch the storefront UI with the current demo catalog.
+
 ## Documentation
 
+- [Production Readiness Boundary](docs/production-readiness.md)
 - [Operations Runbook](docs/operations-runbook.md)
 - [Platform Abstractions](docs/platform-abstractions.md)
 - [Project Documentation (RU)](docs/project-documentation-ru.md)
 - [User Guide (RU)](docs/user-guide-ru.md)
+- [Developer Guide (RU)](docs/developer-guide-ru.md)
 - [Technical Guide (RU)](docs/technical-guide-ru.md)
 
 ## Hardware-Dependent Gaps
 
 The following still require target hardware confirmation:
 
-- real DBV-300-SD protocol commands and transport timings;
-- real payout hardware integration and physical reconciliation;
-- motor/controller protocol details and sensor feedback;
-- kiosk shell lockdown on Windows/Linux;
-- OS service, autostart, and watchdog deployment wiring;
-- pickup-timeout automation beyond the current explicit placeholder.
+- DBV-300-SD command frames, acknowledgements, denomination/event mapping,
+  escrow behavior, transport timings, and restart recovery;
+- real payout hardware integration, physical reconciliation, partial-payout
+  evidence, and cash accounting procedures;
+- motor/controller protocol details, home/jam feedback, and product-drop
+  confirmation;
+- physical delivery-window and pickup confirmation sensors beyond the
+  simulator-safe pickup timeout coordinator;
+- temperature, door, inventory, and position sensor calibration on the target
+  cabinet;
+- kiosk shell lockdown on the target Windows/Linux image;
+- OS service, autostart, and watchdog deployment wiring.

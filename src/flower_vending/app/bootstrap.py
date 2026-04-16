@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
@@ -11,9 +11,11 @@ from typing import Any
 from flower_vending.app.command_bus import CommandBus
 from flower_vending.app.event_bus import EventBus
 from flower_vending.app.fsm import MachineState, StateMachineEngine
+from flower_vending.app.journal import ApplicationJournal, NoopApplicationJournal
 from flower_vending.app.orchestrators import (
     HealthMonitor,
     PaymentCoordinator,
+    PickupTimeoutCoordinator,
     RecoveryManager,
     ServiceModeCoordinator,
     TransactionCoordinator,
@@ -54,15 +56,18 @@ class ApplicationCore:
     inventory_service: InventoryService
     machine_status_service: MachineStatusService
     transaction_coordinator: TransactionCoordinator
+    journal: ApplicationJournal
     payment_coordinator: PaymentCoordinator
     vending_controller: VendingController
     recovery_manager: RecoveryManager
+    pickup_timeout_coordinator: PickupTimeoutCoordinator
     service_mode_coordinator: ServiceModeCoordinator
     health_monitor: HealthMonitor
     watchdog: WatchdogAdapter | None = None
     health_poll_interval_s: float = 0.5
     validator_event_timeout_s: float = 0.05
     watchdog_timeout_s: float = 30.0
+    pickup_timeout_poll_interval_s: float = 0.25
     _runtime_stop: asyncio.Event = field(default_factory=asyncio.Event, init=False)
     _runtime_tasks: list[asyncio.Task[None]] = field(default_factory=list, init=False)
     _runtime_failures: list[BaseException] = field(default_factory=list, init=False)
@@ -81,6 +86,7 @@ class ApplicationCore:
             await self.watchdog.arm(self.watchdog_timeout_s)
         self._spawn_runtime_task(self._validator_event_loop(), "validator-events")
         self._spawn_runtime_task(self._health_monitor_loop(), "health-monitor")
+        self._spawn_runtime_task(self._pickup_timeout_loop(), "pickup-timeout")
 
     async def stop_runtime(self) -> None:
         self._runtime_stop.set()
@@ -130,6 +136,19 @@ class ApplicationCore:
             if self.watchdog is not None:
                 await self.watchdog.kick()
 
+    async def _pickup_timeout_loop(self) -> None:
+        await self.pickup_timeout_coordinator.poll_once(correlation_id="startup-pickup-timeout")
+        while not self._runtime_stop.is_set():
+            try:
+                await asyncio.wait_for(
+                    self._runtime_stop.wait(),
+                    timeout=self.pickup_timeout_poll_interval_s,
+                )
+                break
+            except asyncio.TimeoutError:
+                pass
+            await self.pickup_timeout_coordinator.poll_once()
+
 
 def build_application_core(
     *,
@@ -139,7 +158,7 @@ def build_application_core(
     window_controller: WindowController,
     inventory_service: InventoryService,
     money_inventory: MoneyInventory,
-    devices: dict[str, ManagedDevice],
+    devices: Mapping[str, ManagedDevice],
     accepted_bill_denominations: tuple[int, ...] = (),
     door_sensor: DoorSensor | None = None,
     temperature_sensor: TemperatureSensor | None = None,
@@ -149,12 +168,15 @@ def build_application_core(
     health_poll_interval_s: float = 0.5,
     validator_event_timeout_s: float = 0.05,
     watchdog_timeout_s: float = 30.0,
+    pickup_timeout_s: float = 60.0,
+    journal: ApplicationJournal | None = None,
 ) -> ApplicationCore:
     event_bus = EventBus()
     command_bus = CommandBus()
     fsm = StateMachineEngine(initial_state=initial_state)
     machine_status_service = MachineStatusService(MachineRuntimeAggregate())
     machine_status_service.set_machine_state(initial_state)
+    application_journal = journal or NoopApplicationJournal()
 
     transaction_coordinator = TransactionCoordinator()
     change_manager = ChangeManager(
@@ -169,6 +191,7 @@ def build_application_core(
         event_bus=event_bus,
         fsm=fsm,
         machine_status_service=machine_status_service,
+        journal=application_journal,
     )
     vending_controller = VendingController(
         inventory_service=inventory_service,
@@ -180,12 +203,23 @@ def build_application_core(
         event_bus=event_bus,
         fsm=fsm,
         machine_status_service=machine_status_service,
+        journal=application_journal,
     )
     recovery_manager = RecoveryManager(
         transaction_coordinator=transaction_coordinator,
         event_bus=event_bus,
         fsm=fsm,
         machine_status_service=machine_status_service,
+        journal=application_journal,
+    )
+    pickup_timeout_coordinator = PickupTimeoutCoordinator(
+        transaction_coordinator=transaction_coordinator,
+        window_controller=window_controller,
+        event_bus=event_bus,
+        fsm=fsm,
+        machine_status_service=machine_status_service,
+        pickup_timeout_s=pickup_timeout_s,
+        journal=application_journal,
     )
     service_mode_coordinator = ServiceModeCoordinator(
         event_bus=event_bus,
@@ -212,7 +246,20 @@ def build_application_core(
         lambda command: recovery_manager.recover_transaction(command.transaction_id, command.correlation_id),
     )
     command_bus.register_handler(EnterServiceMode, service_mode_coordinator.enter_service_mode)
-    event_bus.subscribe("vend_authorized", vending_controller.handle_vend_authorized)
+    event_bus.subscribe_critical("vend_authorized", vending_controller.handle_vend_authorized)
+    event_bus.subscribe_best_effort(
+        "delivery_window_opened",
+        pickup_timeout_coordinator.handle_delivery_window_opened,
+    )
+    event_bus.subscribe_best_effort("pickup_confirmed", pickup_timeout_coordinator.handle_pickup_finished)
+    event_bus.subscribe_best_effort(
+        "transaction_completed",
+        pickup_timeout_coordinator.handle_pickup_finished,
+    )
+    event_bus.subscribe_best_effort(
+        "transaction_cancelled",
+        pickup_timeout_coordinator.handle_pickup_finished,
+    )
 
     return ApplicationCore(
         validator=validator,
@@ -222,13 +269,16 @@ def build_application_core(
         inventory_service=inventory_service,
         machine_status_service=machine_status_service,
         transaction_coordinator=transaction_coordinator,
+        journal=application_journal,
         payment_coordinator=payment_coordinator,
         vending_controller=vending_controller,
         recovery_manager=recovery_manager,
+        pickup_timeout_coordinator=pickup_timeout_coordinator,
         service_mode_coordinator=service_mode_coordinator,
         health_monitor=health_monitor,
         watchdog=watchdog,
         health_poll_interval_s=health_poll_interval_s,
         validator_event_timeout_s=validator_event_timeout_s,
         watchdog_timeout_s=watchdog_timeout_s,
+        pickup_timeout_poll_interval_s=min(max(pickup_timeout_s / 10.0, 0.05), 0.25),
     )

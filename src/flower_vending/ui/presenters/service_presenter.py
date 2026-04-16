@@ -16,17 +16,17 @@ _SIMULATOR_ACTION_LABELS = {
     "close_service_door": "Закрыть сервисную дверь",
     "raise_temperature_critical": "Поднять температуру",
     "restore_temperature_nominal": "Восстановить температуру",
-    "inject_validator_unavailable": "Отключить валидатор",
+    "inject_validator_unavailable": "Отключить купюроприемник",
     "inject_bill_rejected": "Следующая купюра отклоняется",
     "inject_bill_jam": "Следующая купюра застрянет",
     "inject_payout_unavailable": "Отключить выдачу сдачи",
-    "inject_partial_payout": "Вызвать partial payout",
-    "inject_motor_fault": "Вызвать motor fault",
-    "inject_window_fault": "Вызвать fault окна выдачи",
-    "inject_inventory_mismatch": "Сымитировать inventory mismatch",
-    "restore_inventory_match": "Восстановить inventory sensor",
-    "clear_simulator_faults": "Сбросить fault injection",
-    "pickup_timeout_placeholder": "Pickup timeout placeholder",
+    "inject_partial_payout": "Сымитировать частичную сдачу",
+    "inject_motor_fault": "Сымитировать ошибку мотора",
+    "inject_window_fault": "Сымитировать ошибку окна выдачи",
+    "inject_inventory_mismatch": "Сымитировать ошибку наличия товара",
+    "restore_inventory_match": "Восстановить датчик наличия",
+    "clear_simulator_faults": "Сбросить ошибки симулятора",
+    "force_pickup_timeout_now": "Сразу вызвать таймаут получения",
 }
 
 
@@ -56,11 +56,11 @@ class ServicePresenter:
                 ActionButtonViewModel(action_id, _SIMULATOR_ACTION_LABELS.get(action_id, action_id))
                 for action_id in simulator_actions
             ],
-            ActionButtonViewModel("exit_service", "Выход из сервиса"),
+            ActionButtonViewModel("exit_service", "Выйти из сервиса"),
         ]
         return ServiceScreenViewModel(
-            title="Сервисный режим",
-            subtitle="Диагностика, recovery и simulator controls",
+            title="Сервис и симулятор",
+            subtitle="Панель оператора отделена от клиентской покупки",
             actions=tuple(actions),
             notes=tuple(notes),
         )
@@ -80,7 +80,7 @@ class ServicePresenter:
         )
         return DiagnosticsScreenViewModel(
             title="Диагностика устройств",
-            subtitle="Текущее состояние machine runtime и симулятора",
+            subtitle="Текущее состояние runtime и симулятора",
             machine_state=diagnostics.machine.machine_state,
             sale_blockers=diagnostics.machine.sale_blockers,
             unresolved_transactions=diagnostics.unresolved_transaction_ids,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from flower_vending.devices.contracts import InventoryPresence
+from flower_vending.devices.contracts import DeviceCommandPolicy, InventoryPresence
 from flower_vending.devices.interfaces import InventorySensor
 from flower_vending.simulators.devices.base import MockManagedDevice
 
@@ -13,8 +13,9 @@ class MockInventorySensor(MockManagedDevice, InventorySensor):
         name: str = "mock_inventory_sensor",
         *,
         slot_states: dict[str, tuple[bool, float]] | None = None,
+        command_policy: DeviceCommandPolicy | None = None,
     ) -> None:
-        super().__init__(name)
+        super().__init__(name, command_policy=command_policy)
         self._slot_states = dict(slot_states or {})
 
     def set_slot_presence(self, slot_id: str, *, has_product: bool, confidence: float = 1.0) -> None:

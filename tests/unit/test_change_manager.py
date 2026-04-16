@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from _support import ROOT  # noqa: F401
+from tests._support import ROOT  # noqa: F401
 
 from flower_vending.domain.entities import MoneyInventory
 from flower_vending.domain.exceptions import ChangeUnavailableError

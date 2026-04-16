@@ -8,14 +8,26 @@ from flower_vending.ui.viewmodels.common import ActionButtonViewModel, BannerVie
 
 
 @dataclass(frozen=True, slots=True)
+class CatalogCategoryViewModel:
+    category_id: str
+    label: str
+
+
+@dataclass(frozen=True, slots=True)
 class CatalogItemViewModel:
     product_id: str
     slot_id: str
     title: str
     category: str
+    category_label: str
     price_text: str
     availability_text: str
     enabled: bool
+    short_description: str | None = None
+    image_path: str | None = None
+    freshness_note: str | None = None
+    size_label: str | None = None
+    accent: str | None = None
     badge_text: str | None = None
 
 
@@ -25,6 +37,7 @@ class CatalogScreenViewModel:
     subtitle: str
     banner: BannerViewModel | None
     items: tuple[CatalogItemViewModel, ...]
+    categories: tuple[CatalogCategoryViewModel, ...] = ()
     primary_action: ActionButtonViewModel | None = None
     secondary_action: ActionButtonViewModel | None = None
 
@@ -35,6 +48,12 @@ class ProductDetailsScreenViewModel:
     subtitle: str
     price_text: str
     availability_text: str
+    short_description: str | None
+    image_path: str | None
+    category_label: str | None
+    freshness_note: str | None
+    size_label: str | None
+    badge_text: str | None
     advisory_text: str | None
     primary_action: ActionButtonViewModel
     secondary_action: ActionButtonViewModel

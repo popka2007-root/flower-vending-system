@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping, MutableMapping
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -56,19 +57,24 @@ class JsonLogFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-class StructuredLoggerAdapter(logging.LoggerAdapter):
+class StructuredLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
     """Keep correlation and transaction identifiers attached to log records."""
 
     def bind(self, **extra: Any) -> "StructuredLoggerAdapter":
-        merged = dict(self.extra)
+        merged = dict(self._base_extra())
         merged.update(extra)
         return StructuredLoggerAdapter(self.logger, merged)
 
-    def process(self, msg: str, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        extra = dict(self.extra)
-        extra.update(kwargs.pop("extra", {}))
+    def process(self, msg: object, kwargs: MutableMapping[str, Any]) -> tuple[object, MutableMapping[str, Any]]:
+        extra = dict(self._base_extra())
+        supplied_extra = kwargs.pop("extra", {})
+        if isinstance(supplied_extra, Mapping):
+            extra.update(supplied_extra)
         kwargs["extra"] = extra
         return msg, kwargs
+
+    def _base_extra(self) -> Mapping[str, object]:
+        return {} if self.extra is None else self.extra
 
 
 def close_logging(logger: StructuredLoggerAdapter | logging.Logger) -> None:

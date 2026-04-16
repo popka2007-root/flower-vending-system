@@ -8,6 +8,9 @@ from typing import Any
 
 
 class SimulatorFaultCode(StrEnum):
+    COMMAND_TIMEOUT = "command_timeout"
+    TRANSIENT_COMMAND_FAILURE = "transient_command_failure"
+    AMBIGUOUS_PHYSICAL_RESULT = "ambiguous_physical_result"
     VALIDATOR_UNAVAILABLE = "validator_unavailable"
     BILL_JAM = "bill_jam"
     BILL_REJECTED = "bill_rejected"

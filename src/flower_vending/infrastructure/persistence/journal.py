@@ -7,6 +7,12 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
+from flower_vending.app.journal import (
+    ApplicationJournalRecord,
+    JournalOutcome,
+    intent_idempotency_key,
+    outcome_idempotency_key,
+)
 from flower_vending.domain.events import DomainEvent
 from flower_vending.infrastructure.persistence.sqlite.database import SQLiteDatabase
 
@@ -17,6 +23,7 @@ def _utc_now() -> datetime:
 
 class JournalEntryKind(StrEnum):
     INTENT = "intent"
+    OUTCOME = "outcome"
     EVENT = "event"
     FAULT = "fault"
     RECOVERY = "recovery"
@@ -103,10 +110,11 @@ class SQLiteTransactionJournal:
             )
         )
 
-    def append_fault(
+    def append_outcome(
         self,
         *,
-        fault_name: str,
+        action_name: str,
+        outcome: JournalOutcome,
         correlation_id: str,
         transaction_id: str | None = None,
         machine_state: str | None = None,
@@ -116,39 +124,74 @@ class SQLiteTransactionJournal:
     ) -> int:
         return self.append_entry(
             JournalEntry(
-                entry_kind=JournalEntryKind.FAULT,
-                entry_name=fault_name,
+                entry_kind=JournalEntryKind.OUTCOME,
+                entry_name=f"{action_name}_{outcome.value}",
                 correlation_id=correlation_id,
                 transaction_id=transaction_id,
                 machine_state=machine_state,
                 transaction_status=transaction_status,
-                payload=dict(payload),
+                payload={"action_name": action_name, "outcome": outcome.value, **dict(payload)},
                 idempotency_key=idempotency_key,
             )
         )
 
-    def append_recovery_record(
+    def record_intent(
         self,
         *,
         action_name: str,
         correlation_id: str,
-        transaction_id: str | None = None,
+        transaction_id: str,
+        logical_step: str,
         machine_state: str | None = None,
         transaction_status: str | None = None,
-        idempotency_key: str | None = None,
-        **payload: Any,
+        payload: dict[str, Any] | None = None,
     ) -> int:
-        return self.append_entry(
-            JournalEntry(
-                entry_kind=JournalEntryKind.RECOVERY,
-                entry_name=action_name,
-                correlation_id=correlation_id,
+        return self.append_intent(
+            intent_name=action_name,
+            correlation_id=correlation_id,
+            transaction_id=transaction_id,
+            machine_state=machine_state,
+            transaction_status=transaction_status,
+            idempotency_key=intent_idempotency_key(
                 transaction_id=transaction_id,
-                machine_state=machine_state,
-                transaction_status=transaction_status,
-                payload=dict(payload),
-                idempotency_key=idempotency_key,
-            )
+                action_name=action_name,
+                logical_step=logical_step,
+            ),
+            logical_step=logical_step,
+            **dict(payload or {}),
+        )
+
+    def record_outcome(
+        self,
+        *,
+        action_name: str,
+        outcome: JournalOutcome,
+        correlation_id: str,
+        transaction_id: str,
+        logical_step: str,
+        machine_state: str | None = None,
+        transaction_status: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> int:
+        return self.append_outcome(
+            action_name=action_name,
+            outcome=outcome,
+            correlation_id=correlation_id,
+            transaction_id=transaction_id,
+            machine_state=machine_state,
+            transaction_status=transaction_status,
+            idempotency_key=outcome_idempotency_key(
+                transaction_id=transaction_id,
+                action_name=action_name,
+                logical_step=logical_step,
+            ),
+            logical_step=logical_step,
+            intent_idempotency_key=intent_idempotency_key(
+                transaction_id=transaction_id,
+                action_name=action_name,
+                logical_step=logical_step,
+            ),
+            **dict(payload or {}),
         )
 
     def append_event(
@@ -173,23 +216,6 @@ class SQLiteTransactionJournal:
             )
         )
 
-    async def handle_domain_event(
-        self,
-        event: DomainEvent,
-        *,
-        machine_state: str | None = None,
-        transaction_status: str | None = None,
-    ) -> None:
-        self.append_event(
-            event,
-            machine_state=machine_state,
-            transaction_status=transaction_status,
-            idempotency_key=(
-                f"event:{event.correlation_id}:{event.transaction_id or 'machine'}:"
-                f"{event.event_type}:{event.occurred_at.isoformat()}"
-            ),
-        )
-
     def read_for_transaction(self, transaction_id: str) -> tuple[JournalEntry, ...]:
         rows = self._database.query_all(
             """
@@ -211,27 +237,6 @@ class SQLiteTransactionJournal:
         )
         return tuple(self._row_to_entry(row) for row in rows)
 
-    def read_recent(self, limit: int = 100) -> tuple[JournalEntry, ...]:
-        rows = self._database.query_all(
-            """
-            SELECT
-                transaction_id,
-                correlation_id,
-                entry_kind,
-                entry_name,
-                machine_state,
-                transaction_status,
-                payload_json,
-                idempotency_key,
-                created_at
-            FROM transaction_journal
-            ORDER BY journal_id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        return tuple(self._row_to_entry(row) for row in reversed(rows))
-
     def unresolved_transaction_ids(self) -> tuple[str, ...]:
         rows = self._database.query_all(
             """
@@ -247,9 +252,58 @@ class SQLiteTransactionJournal:
         )
         return tuple(row["transaction_id"] for row in rows)
 
+    def unresolved_intents(self) -> tuple[ApplicationJournalRecord, ...]:
+        rows = self._database.query_all(
+            """
+            SELECT
+                i.transaction_id,
+                i.correlation_id,
+                i.entry_kind,
+                i.entry_name,
+                i.machine_state,
+                i.transaction_status,
+                i.payload_json,
+                i.idempotency_key,
+                i.created_at
+            FROM transaction_journal i
+            LEFT JOIN transaction_journal o
+              ON o.entry_kind = 'outcome'
+             AND o.idempotency_key = replace(i.idempotency_key, ':intent', ':outcome')
+            WHERE i.entry_kind = 'intent'
+              AND i.idempotency_key IS NOT NULL
+              AND o.journal_id IS NULL
+            ORDER BY i.journal_id ASC
+            """
+        )
+        return tuple(self._row_to_application_record(row) for row in rows)
+
+    def unresolved_intent_transaction_ids(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    entry.transaction_id
+                    for entry in self.unresolved_intents()
+                    if entry.transaction_id is not None
+                }
+            )
+        )
+
     def _row_to_entry(self, row: Any) -> JournalEntry:
         return JournalEntry(
             entry_kind=JournalEntryKind(row["entry_kind"]),
+            entry_name=row["entry_name"],
+            correlation_id=row["correlation_id"],
+            transaction_id=row["transaction_id"],
+            machine_state=row["machine_state"],
+            transaction_status=row["transaction_status"],
+            payload=self._database.loads(row["payload_json"], default={}) or {},
+            idempotency_key=row["idempotency_key"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def _row_to_application_record(self, row: Any) -> ApplicationJournalRecord:
+        return ApplicationJournalRecord(
+            entry_kind=row["entry_kind"],
             entry_name=row["entry_name"],
             correlation_id=row["correlation_id"],
             transaction_id=row["transaction_id"],

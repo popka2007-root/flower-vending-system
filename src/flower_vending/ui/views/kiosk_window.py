@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable
+from collections.abc import Coroutine
+from pathlib import Path
+from typing import Any, cast
 
-from PySide6.QtWidgets import QMainWindow, QStackedWidget
+from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
 from flower_vending.ui.navigation import ScreenId
 from flower_vending.ui.presenters import KioskPresenter, ScreenRender
@@ -21,15 +24,37 @@ from flower_vending.ui.views.screens import (
 )
 
 
+def _install_cyrillic_font() -> None:
+    app = cast(QApplication | None, QApplication.instance())
+    if app is None:
+        return
+    candidates = (
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("C:/Windows/Fonts/segoeui.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        font_id = QFontDatabase.addApplicationFont(str(candidate))
+        families = QFontDatabase.applicationFontFamilies(font_id)
+        if families:
+            app.setFont(QFont(families[0]))
+            return
+
+
 class KioskMainWindow(QMainWindow):
     """Example kiosk window bound to the presenter/view-model layer."""
 
     def __init__(self, presenter: KioskPresenter, *, window_title: str = "Flower Vending Kiosk") -> None:
         super().__init__()
+        _install_cyrillic_font()
         self._presenter = presenter
         self._presenter.subscribe(self.render_screen)
         self.setWindowTitle(window_title)
         self.resize(1280, 800)
+        self.setMinimumSize(1024, 700)
         self.setStyleSheet(APP_STYLESHEET)
 
         self._stack = QStackedWidget()
@@ -111,5 +136,5 @@ class KioskMainWindow(QMainWindow):
     def _handle_action(self, action_id: str) -> None:
         self._run_async(self._presenter.handle_action(action_id))
 
-    def _run_async(self, coroutine: Awaitable[object]) -> None:
+    def _run_async(self, coroutine: Coroutine[Any, Any, object]) -> None:
         asyncio.get_event_loop().create_task(coroutine)

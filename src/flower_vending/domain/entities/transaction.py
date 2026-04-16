@@ -31,6 +31,7 @@ class TransactionStatus(StrEnum):
     OPENING_DELIVERY_WINDOW = "opening_delivery_window"
     WAITING_FOR_CUSTOMER_PICKUP = "waiting_for_customer_pickup"
     CLOSING_DELIVERY_WINDOW = "closing_delivery_window"
+    PICKUP_TIMED_OUT = "pickup_timed_out"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAULTED = "faulted"
@@ -174,6 +175,12 @@ class Transaction:
         self.status = TransactionStatus.COMPLETED
         self.touch()
 
+    def mark_pickup_timed_out_window_closed(self) -> None:
+        self.delivery_status = DeliveryStatus.WINDOW_CLOSED
+        self.status = TransactionStatus.PICKUP_TIMED_OUT
+        self.recovery_status = RecoveryStatus.MANUAL_REVIEW
+        self.touch()
+
     def cancel(self) -> None:
         self.status = TransactionStatus.CANCELLED
         self.payment_status = PaymentStatus.CANCELLED
@@ -183,6 +190,10 @@ class Transaction:
 
     def mark_faulted(self) -> None:
         self.status = TransactionStatus.FAULTED
+        self.recovery_status = RecoveryStatus.PENDING
+        self.touch()
+
+    def mark_recovery_pending(self) -> None:
         self.recovery_status = RecoveryStatus.PENDING
         self.touch()
 

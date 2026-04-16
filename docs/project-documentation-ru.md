@@ -41,7 +41,7 @@ Verification finished successfully.
 
 Если команда прошла успешно, значит текущий simulator baseline компилируется, автоматические тесты проходят, фоновые runtime-задачи работают, базовые safety-блокировки активны, небезопасная сдача блокируется, а отмена после принятой наличности выполняет возврат.
 
-В тестах сейчас ожидаемо есть один `expected failure`: сценарий `pickup timeout`. Это не поломка проверки, а зафиксированный незакрытый production-сценарий: нужно определить, что делать, если клиент не забрал товар из окна выдачи.
+Сценарий `pickup timeout` теперь входит в passing simulator baseline: таймаут закрывает окно выдачи, блокирует продажи и переводит транзакцию в manual review. Для реального автомата это остается hardware-dependent областью: нужны физические датчики pickup/window и стендовая проверка.
 
 ## 3. Что уже реализовано
 
@@ -62,7 +62,7 @@ Verification finished successfully.
 - Реальный узел сдачи не подключен: нужен подтвержденный протокол, датчики наличия денег, сценарии partial payout и процедуры сверки.
 - Мотор выдачи, окно выдачи, датчики позиции, датчик товара, охлаждение и сервисная дверь пока представлены интерфейсами и симуляторами.
 - Полный durable journal wiring в live runtime path нужно усилить перед production.
-- Pickup timeout policy пока специально отмечена ожидаемым failing test.
+- Pickup timeout policy реализована для simulator-safe runtime, но поведение для реального автомата требует physical pickup/window sensing и bench validation.
 - Kiosk mode, autostart, OS watchdog, упаковка под Windows service или Linux systemd не завершены.
 
 ## 5. Архитектура по слоям
@@ -346,7 +346,7 @@ python scripts\verify_project.py
 - Подтвердить режим DBV-300-SD: MDB, Serial или Pulse-like.
 - Реализовать и протестировать реальный transport/protocol adapter.
 - Подключить реальный узел сдачи и проверить partial payout, empty cassette, jam, mismatch.
-- Закрыть pickup timeout policy.
+- Подтвердить pickup/window sensing на стенде и описать pilot-процедуру manual review после pickup timeout.
 - Довести transaction journal до полного journal-first live path.
 - Реализовать service procedures: инкассация, пополнение, ручная сверка, аудит сервисной двери.
 - Реализовать platform-specific kiosk/autostart/watchdog packaging для Windows и Linux.
@@ -371,4 +371,3 @@ python scripts\verify_project.py
 - Новые аппаратные решения фиксировать ADR-документами в `docs/adr`.
 - Не писать низкоуровневые команды DBV-300-SD по догадкам.
 - Любое физическое действие должно иметь idempotency, recovery story и тесты отказов.
-

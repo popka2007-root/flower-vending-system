@@ -5,8 +5,16 @@ from pathlib import Path
 
 import yaml
 
-from _support import ROOT, workspace_temp_dir
+from tests._support import ROOT, workspace_temp_dir
 
+from flower_vending.domain.entities import Product, Slot
+from flower_vending.domain.value_objects import Amount, Currency, ProductId, SlotId
+from flower_vending.infrastructure.persistence.sqlite import (
+    ProductRepository,
+    SQLiteDatabase,
+    SlotRepository,
+    ensure_sqlite_schema,
+)
 from flower_vending.runtime.bootstrap import build_simulator_environment
 
 
@@ -69,6 +77,45 @@ class RuntimeModeIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(report["operator_id"], "svc-tech")
                 self.assertEqual(report["machine_state"], "SERVICE_MODE")
                 self.assertTrue(any(item["event_type"] == "simulator_action_applied" for item in report["recent_events"]))
+            finally:
+                await environment.stop()
+
+    async def test_legacy_demo_catalog_is_replaced_with_storefront_catalog(self) -> None:
+        with workspace_temp_dir(prefix="runtime-") as tmp:
+            config_path = self._make_temp_config(tmp)
+            database = SQLiteDatabase(tmp / "runtime.db")
+            ensure_sqlite_schema(database)
+            products = ProductRepository(database)
+            slots = SlotRepository(database)
+            products.save(
+                Product(
+                    product_id=ProductId("rose_red"),
+                    name="rose_red",
+                    display_name="Red Roses",
+                    price=Amount(500, Currency("RUB")),
+                    category="flowers",
+                    metadata={},
+                )
+            )
+            slots.save(
+                Slot(
+                    slot_id=SlotId("A1"),
+                    product_id=ProductId("rose_red"),
+                    capacity=8,
+                    quantity=4,
+                )
+            )
+            database.close()
+
+            environment = await build_simulator_environment(
+                config_path=config_path,
+                prepare_directories=True,
+            )
+            await environment.start()
+            try:
+                entries = environment.ui_facade.catalog_entries()
+                self.assertTrue(any(entry.display_name == "Розы Эквадор 7 шт." for entry in entries))
+                self.assertFalse(any(entry.display_name == "Red Roses" for entry in entries))
             finally:
                 await environment.stop()
 

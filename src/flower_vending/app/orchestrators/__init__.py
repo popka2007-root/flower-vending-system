@@ -2,6 +2,7 @@
 
 from flower_vending.app.orchestrators.health_monitor import HealthMonitor
 from flower_vending.app.orchestrators.payment_coordinator import PaymentCoordinator
+from flower_vending.app.orchestrators.pickup_timeout_coordinator import PickupTimeoutCoordinator
 from flower_vending.app.orchestrators.recovery_manager import RecoveryManager, RecoveryPlan
 from flower_vending.app.orchestrators.service_mode_coordinator import ServiceModeCoordinator
 from flower_vending.app.orchestrators.transaction_coordinator import TransactionCoordinator
@@ -10,6 +11,7 @@ from flower_vending.app.orchestrators.vending_controller import VendingControlle
 __all__ = [
     "HealthMonitor",
     "PaymentCoordinator",
+    "PickupTimeoutCoordinator",
     "RecoveryManager",
     "RecoveryPlan",
     "ServiceModeCoordinator",

@@ -97,6 +97,9 @@ class ProductRepository:
             for row in rows
         )
 
+    def delete_all(self) -> None:
+        self._database.execute("DELETE FROM products")
+
 
 class SlotRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
@@ -146,6 +149,9 @@ class SlotRepository:
     def list_all(self) -> tuple[Slot, ...]:
         rows = self._database.query_all("SELECT * FROM slots ORDER BY slot_id ASC")
         return tuple(slot_from_row(row) for row in rows)
+
+    def delete_all(self) -> None:
+        self._database.execute("DELETE FROM slots")
 
 
 class MachineStatusRepository:
@@ -383,20 +389,6 @@ class TransactionRepository:
             for row in rows
         )
 
-    def list_recent(self, limit: int = 100) -> tuple[Transaction, ...]:
-        rows = self._database.query_all(
-            "SELECT * FROM transactions ORDER BY updated_at DESC LIMIT ?",
-            (limit,),
-        )
-        return tuple(
-            transaction_from_row(
-                row,
-                payment_session_json=self._database.loads(row["payment_session_json"], default=None),
-                change_reserve_json=self._database.loads(row["change_reserve_json"], default=None),
-            )
-            for row in rows
-        )
-
 
 class DeviceFaultLogRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
@@ -521,37 +513,6 @@ class OperationalEventRepository:
                 _utc_now_iso(),
             ),
         )
-
-    def record_recovery_event(
-        self,
-        *,
-        action_name: str,
-        outcome: str,
-        correlation_id: str,
-        transaction_id: str | None = None,
-        details: dict[str, Any] | None = None,
-    ) -> int:
-        return self._database.insert(
-            """
-            INSERT INTO recovery_log (
-                transaction_id,
-                correlation_id,
-                action_name,
-                outcome,
-                details_json,
-                occurred_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                transaction_id,
-                correlation_id,
-                action_name,
-                outcome,
-                self._database.dumps(details),
-                _utc_now_iso(),
-            ),
-        )
-
 
 class DeviceSettingsRepository:
     def __init__(self, database: SQLiteDatabase) -> None:

@@ -4,12 +4,9 @@ machine:
   startup_state: SELF_TEST
   policies:
     critical_temperature_celsius: 8.0
-    cash_session_timeout_s: 180.0
     pickup_timeout_s: 60.0
-    exact_change_policy: block_cash_sale
 
 runtime:
-  startup_self_test: true
   health_poll_interval_s: 0.5
   validator_event_timeout_s: 0.05
   watchdog_timeout_s: 30.0
@@ -18,52 +15,119 @@ runtime:
   seed_demo_data: true
 
 ui:
-  window_title: Flower Vending Simulator
+  window_title: Цветочный автомат
   kiosk_fullscreen: false
-  show_simulator_controls: true
-  default_operator_id: technician
 
 catalog:
   items:
-    - product_id: rose_red
+    - product_id: roses_ecuador_7
       slot_id: A1
-      name: rose_red
-      display_name: Red Roses
-      category: flowers
-      price_minor_units: 500
+      name: roses_ecuador_7
+      display_name: Розы Эквадор 7 шт.
+      category: roses
+      price_minor_units: 249000
       quantity: 4
       capacity: 8
       is_bouquet: false
       enabled: true
       temperature_profile: cooled
       metadata:
-        color: red
-    - product_id: tulip_white
+        short_description: Классические крупные розы в лаконичной упаковке.
+        image_path: products/roses-ecuador-7.jpg
+        color_theme: burgundy
+        accent: "#8f1f45"
+        freshness_note: Собран сегодня
+        size_label: 7 стеблей
+    - product_id: white_tulips_9
       slot_id: A2
-      name: tulip_white
-      display_name: White Tulips
-      category: flowers
-      price_minor_units: 450
+      name: white_tulips_9
+      display_name: Тюльпаны белые 9 шт.
+      category: tulips
+      price_minor_units: 199000
       quantity: 3
       capacity: 8
       is_bouquet: false
       enabled: true
       temperature_profile: cooled
       metadata:
-        color: white
-    - product_id: spring_bouquet
+        short_description: Светлый весенний букет для дома или комплимента.
+        image_path: products/white-tulips-9.jpg
+        color_theme: green
+        accent: "#1f6f4a"
+        freshness_note: Поставка утро
+        size_label: 9 стеблей
+    - product_id: gentle_mix
       slot_id: B1
-      name: spring_bouquet
-      display_name: Spring Bouquet
+      name: gentle_mix
+      display_name: Нежный микс
       category: bouquets
-      price_minor_units: 900
-      quantity: 2
+      price_minor_units: 299000
+      quantity: 3
+      capacity: 6
+      is_bouquet: true
+      enabled: true
+      temperature_profile: cooled
+      metadata:
+        short_description: Розы и сезонные цветы в мягкой пастельной гамме.
+        image_path: products/gentle-mix.jpg
+        color_theme: blush
+        accent: "#b88a44"
+        freshness_note: Собран сегодня
+        size_label: Средний букет
+    - product_id: compliment_bouquet
+      slot_id: B2
+      name: compliment_bouquet
+      display_name: Букет комплимент
+      category: gift
+      price_minor_units: 149000
+      quantity: 5
+      capacity: 6
+      is_bouquet: true
+      enabled: true
+      temperature_profile: cooled
+      metadata:
+        short_description: Небольшой аккуратный букет для приятного повода.
+        image_path: products/compliment-bouquet.jpg
+        color_theme: gold
+        accent: "#b88a44"
+        freshness_note: Свежая поставка
+        size_label: Подарочный формат
+    - product_id: peony_roses
+      slot_id: C1
+      name: peony_roses
+      display_name: Пионовидные розы
+      category: roses
+      price_minor_units: 349000
+      quantity: 1
       capacity: 4
       is_bouquet: true
       enabled: true
       temperature_profile: cooled
       metadata:
-        style: mixed
+        short_description: Объёмные нежно-розовые бутоны с премиальной подачей.
+        image_path: products/peony-roses.jpg
+        color_theme: blush
+        accent: "#8f1f45"
+        freshness_note: Остался один
+        size_label: Премиум букет
+    - product_id: seasonal_bouquet
+      slot_id: C2
+      name: seasonal_bouquet
+      display_name: Сезонный букет
+      category: seasonal
+      price_minor_units: 249000
+      quantity: 2
+      capacity: 5
+      is_bouquet: true
+      enabled: true
+      temperature_profile: cooled
+      metadata:
+        short_description: Яркий микс из актуальных сезонных цветов и зелени.
+        image_path: products/seasonal-bouquet.jpg
+        color_theme: green
+        accent: "#1f6f4a"
+        freshness_note: Срезка сегодня
+        size_label: Средний букет
 
 persistence:
   sqlite_path: var/data/flower_vending_simulator.db
@@ -88,7 +152,17 @@ platform:
   watchdog:
     enabled: false
     adapter: simulator
-    timeout_s: 30.0
+    policy:
+      timeout_s: 1.0
+      retry_count: 1
+      retryable_faults: [command_timeout, transient_command_failure, communication_error]
+      non_retryable_faults:
+        - ambiguous_physical_result
+        - physical_state_mismatch
+        - reconciliation_required
+        - unsupported_operation
+        - configuration_error
+      require_manual_review_on_ambiguous_result: true
     settings: {}
 
 simulator:
@@ -103,12 +177,15 @@ simulator:
     - door_open
     - critical_temperature
     - inventory_mismatch
-    - pickup_timeout_placeholder
-  accepted_bill_denominations_minor: [100, 500, 1000]
-  quick_insert_bill_denominations_minor: [100, 500, 1000]
+    - pickup_timeout
+  accepted_bill_denominations_minor: [50000, 100000, 200000, 500000]
+  quick_insert_bill_denominations_minor: [50000, 100000, 200000, 500000]
   change_inventory:
-    100: 10
-    50: 10
+    100000: 10
+    50000: 10
+    10000: 20
+    5000: 20
+    1000: 50
   initial_temperature_celsius: 4.0
   initial_service_door_open: false
   initial_inventory_presence: true
@@ -125,7 +202,19 @@ devices:
     poll_interval_s: 0.2
     startup_disable_acceptance: true
     fallback_disable_on_fault: true
-    accepted_denominations_minor: [100, 500, 1000]
+    requires_hardware_confirmation: false
+    accepted_denominations_minor: [50000, 100000, 200000, 500000]
+    policy: &simulator_device_policy
+      timeout_s: 1.0
+      retry_count: 1
+      retryable_faults: [command_timeout, transient_command_failure, communication_error]
+      non_retryable_faults:
+        - ambiguous_physical_result
+        - physical_state_mismatch
+        - reconciliation_required
+        - unsupported_operation
+        - configuration_error
+      require_manual_review_on_ambiguous_result: true
     serial:
       port: SIMULATOR
       baudrate: 9600
@@ -142,6 +231,7 @@ devices:
     mapping: simulator_change_dispenser
     timeouts_ms:
       dispense: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -153,6 +243,7 @@ devices:
     timeouts_ms:
       vend: 100
       home: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -163,6 +254,7 @@ devices:
     mapping: simulator_cooling
     timeouts_ms:
       command: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -174,6 +266,7 @@ devices:
     timeouts_ms:
       open: 100
       close: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -184,6 +277,7 @@ devices:
     mapping: simulator_temperature
     timeouts_ms:
       read: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -194,6 +288,7 @@ devices:
     mapping: simulator_door
     timeouts_ms:
       read: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -204,6 +299,7 @@ devices:
     mapping: simulator_inventory
     timeouts_ms:
       read: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false
 
@@ -214,5 +310,6 @@ devices:
     mapping: simulator_position
     timeouts_ms:
       read: 100
+    policy: *simulator_device_policy
     settings: {}
     requires_hardware_confirmation: false

@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, cast
+
+
+SQLiteValue = str | bytes | int | float | None
+SQLiteParameters = Sequence[SQLiteValue] | Mapping[str, SQLiteValue]
 
 
 class SQLiteDatabase:
@@ -50,7 +54,7 @@ class SQLiteDatabase:
             self._connection.executescript(script)
             self._connection.commit()
 
-    def execute(self, sql: str, parameters: Iterable[Any] | Mapping[str, Any] = ()) -> None:
+    def execute(self, sql: str, parameters: SQLiteParameters = ()) -> None:
         with self._lock:
             self._connection.execute(sql, parameters)
             self._connection.commit()
@@ -58,38 +62,40 @@ class SQLiteDatabase:
     def executemany(
         self,
         sql: str,
-        parameter_sets: Iterable[Iterable[Any] | Mapping[str, Any]],
+        parameter_sets: Iterable[SQLiteParameters],
     ) -> None:
         with self._lock:
             self._connection.executemany(sql, parameter_sets)
             self._connection.commit()
 
-    def insert(self, sql: str, parameters: Iterable[Any] | Mapping[str, Any] = ()) -> int:
+    def insert(self, sql: str, parameters: SQLiteParameters = ()) -> int:
         with self._lock:
             cursor = self._connection.execute(sql, parameters)
             self._connection.commit()
-            return int(cursor.lastrowid)
+            if cursor.lastrowid is None:
+                raise RuntimeError("SQLite insert did not produce a row id")
+            return cursor.lastrowid
 
     def query_one(
         self,
         sql: str,
-        parameters: Iterable[Any] | Mapping[str, Any] = (),
+        parameters: SQLiteParameters = (),
     ) -> sqlite3.Row | None:
         with self._lock:
             cursor = self._connection.execute(sql, parameters)
-            return cursor.fetchone()
+            return cast(sqlite3.Row | None, cursor.fetchone())
 
     def query_all(
         self,
         sql: str,
-        parameters: Iterable[Any] | Mapping[str, Any] = (),
+        parameters: SQLiteParameters = (),
     ) -> list[sqlite3.Row]:
         with self._lock:
             cursor = self._connection.execute(sql, parameters)
-            return list(cursor.fetchall())
+            return list(cast(Sequence[sqlite3.Row], cursor.fetchall()))
 
     @contextmanager
-    def transaction(self) -> Any:
+    def transaction(self) -> Iterator[sqlite3.Connection]:
         with self._lock:
             try:
                 self._connection.execute("BEGIN")

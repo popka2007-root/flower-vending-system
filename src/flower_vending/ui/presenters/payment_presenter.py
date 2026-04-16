@@ -21,14 +21,14 @@ class PaymentPresenter:
         banner = None
         if warning_message:
             banner = BannerViewModel(
-                title="Внимание",
-                message=warning_message,
+                title="Проверьте оплату",
+                message=self._humanize_warning(warning_message),
                 tone=BannerTone.WARNING,
             )
         elif machine.exact_change_only:
             banner = BannerViewModel(
-                title="Точная сумма",
-                message="Сдача не гарантируется. Внесите точную стоимость товара.",
+                title="Нужна точная сумма",
+                message="Сдача сейчас не гарантируется. Внесите ровно стоимость выбранного товара.",
                 tone=BannerTone.WARNING,
             )
         return PaymentScreenViewModel(
@@ -39,14 +39,26 @@ class PaymentPresenter:
             accepted_text=format_money(transaction.accepted_minor_units, transaction.currency_code),
             remaining_text=format_money(remaining_minor, transaction.currency_code),
             change_text=format_money(transaction.change_due_minor_units, transaction.currency_code),
-            help_text="Товар выдается только после подтвержденной оплаты и завершения выдачи сдачи.",
+            help_text="После полной оплаты автомат выдаст букет и откроет окно получения.",
             banner=banner,
             cancel_action=ActionButtonViewModel("cancel_purchase", "Отменить покупку"),
             quick_insert_actions=tuple(
                 ActionButtonViewModel(
                     action_id=f"insert_bill:{denomination}",
-                    label=f"+{format_money(denomination, transaction.currency_code)}",
+                    label=format_money(denomination, transaction.currency_code),
                 )
                 for denomination in quick_insert_denominations
             ),
         )
+
+    def _humanize_warning(self, message: str) -> str:
+        normalized = message.lower()
+        if "bill rejected" in normalized or "rejected" in normalized:
+            return "Купюра не принята. Проверьте купюру или попробуйте другую."
+        if "bill jam" in normalized or "jam" in normalized:
+            return "Купюра застряла. Покупка остановлена до проверки автомата."
+        if "validator unavailable" in normalized or "validator" in normalized:
+            return "Автомат временно не принимает оплату."
+        if "change" in normalized or "payout" in normalized:
+            return "Автомат не может безопасно выдать сдачу для этой оплаты."
+        return message

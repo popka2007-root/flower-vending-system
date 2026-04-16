@@ -1,138 +1,191 @@
 # Flower Vending Simulator: руководство пользователя
 
-## 1. Для чего приложение
+## 1. Что это за приложение
 
 `Flower Vending Simulator` — это настольная simulator-first версия ПО цветочного автомата.
-Она нужна для демонстрации, тестирования UX, отладки сценариев продажи и сервисной
-диагностики без подключения реального оборудования.
 
-Приложение позволяет:
+Приложение нужно для:
 
-- открыть kiosk-like интерфейс автомата;
-- пройти полный пользовательский сценарий покупки;
-- проверить сервисные и диагностические экраны;
-- воспроизвести предсказуемые fault-сценарии в безопасном режиме.
+- демонстрации интерфейса автомата;
+- проверки сценариев покупки без реального железа;
+- показа сервисных и диагностических режимов;
+- воспроизведения типовых ошибок в безопасном режиме.
 
-## 2. Что скачать
+Это **не готовая боевая прошивка автомата**. Реальные протоколы купюроприемника, узла сдачи, моторов и датчиков пока не подтверждены стендом и не должны считаться завершенными.
 
-Windows:
+## 2. Что уже умеет текущая версия
 
-- `FlowerVendingSimulator-Setup-Windows-x64.exe` — обычный установщик;
-- `FlowerVendingSimulator-Windows-x64.exe` — portable single-file версия без установки.
+В текущем simulator baseline можно:
 
-Linux:
+- открыть kiosk-подобный интерфейс;
+- просматривать каталог цветов;
+- выбрать товар и пройти наличный сценарий оплаты;
+- быстро “внести” купюры через simulator controls;
+- открыть экран диагностики;
+- войти в сервисный режим;
+- воспроизвести ошибки: `bill rejected`, `bill jam`, `validator unavailable`, `partial payout`, `motor fault`, `inventory mismatch`, `door open`, `critical temperature`;
+- увидеть блокировки продаж и последние события автомата.
 
-- `FlowerVendingSimulator-Linux-x86_64.AppImage` — основной one-file дистрибутив;
-- `FlowerVendingSimulator-Linux-x86_64.tar.gz` — резервный self-contained архив.
+## 3. Самый простой способ проверить работу
 
-Python отдельно ставить не нужно: runtime уже встроен в собранные артефакты.
+Если у вас проект открыт из исходников:
 
-## 3. Установка и первый запуск
-
-### Windows
-
-Если у вас `FlowerVendingSimulator-Setup-Windows-x64.exe`:
-
-1. Запустите установщик.
-2. Подтвердите папку установки.
-3. Дождитесь создания ярлыка `Flower Vending Simulator`.
-4. Запустите приложение из меню Пуск или с рабочего стола.
-
-Если у вас `FlowerVendingSimulator-Windows-x64.exe`:
-
-1. Сохраните файл в удобную папку.
-2. Запустите его двойным щелчком.
-
-### Linux
-
-Для `FlowerVendingSimulator-Linux-x86_64.AppImage`:
-
-```bash
-chmod +x FlowerVendingSimulator-Linux-x86_64.AppImage
-./FlowerVendingSimulator-Linux-x86_64.AppImage
+```powershell
+cd C:\Users\User\Desktop\flower-vending-system
+python scripts\verify_project.py
 ```
 
-## 4. Где лежат данные
+Если проверка успешна, вы увидите:
 
-Приложение не пишет рабочие данные рядом со своей сборкой. Это сделано специально,
-чтобы portable `.exe` и `AppImage` можно было переносить как обычные desktop-приложения.
+- успешную валидацию конфига;
+- успешную компиляцию кода;
+- прохождение unit/integration/recovery тестов;
+- успешный diagnostics smoke test;
+- успешные simulator runtime сценарии.
 
-Windows:
+## 4. Как запустить приложение вручную
 
-- состояние, база, логи: `%LOCALAPPDATA%\FlowerVendingSystem`
-- скопированная документация: `%LOCALAPPDATA%\FlowerVendingSystem\docs`
+### 4.1 Проверка конфига
 
-Linux:
+```powershell
+python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
+```
 
-- состояние, база, логи: `~/.local/state/flower-vending-system`
-- документация: `~/.local/state/flower-vending-system/docs`
+Команда:
 
-## 5. Основные экраны
+- проверяет конфиг;
+- создает рабочие каталоги;
+- подготавливает локальное состояние.
 
-В приложении доступны:
+### 4.2 Диагностика без UI
 
-- главный экран;
-- каталог товаров;
-- карточка товара;
-- экран оплаты;
-- экран `exact change only`;
-- экран `нет сдачи`;
-- экран `товар выдается`;
-- экран `заберите товар`;
-- экран ошибки;
-- сервисный экран;
-- экран диагностики;
-- recovery/restricted mode экран.
+```powershell
+python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
+```
 
-## 6. Как пройти обычную продажу
+Вы увидите:
 
-1. Откройте каталог.
+- текущее состояние автомата;
+- блокировки продаж;
+- состояния устройств;
+- последние события;
+- platform extension points.
+
+### 4.3 Сервисный режим
+
+```powershell
+python -m flower_vending service --config config\examples\machine.simulator.yaml
+```
+
+### 4.4 Запуск simulator runtime
+
+```powershell
+python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
+```
+
+### 4.5 Запуск интерфейса
+
+```powershell
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
+```
+
+Если хотите пользоваться готовыми Windows-скриптами:
+
+```powershell
+scripts\validate-config.bat
+scripts\run-diagnostics.bat
+scripts\run-service-mode.bat
+scripts\run-simulator-runtime.bat
+scripts\run-simulator-ui.bat
+```
+
+## 5. Как пройти обычную покупку
+
+1. Откройте каталог товаров.
 2. Выберите товар.
 3. Перейдите на экран оплаты.
 4. Используйте быстрые действия внесения купюр.
-5. Дождитесь экрана выдачи.
+5. Дождитесь перехода к выдаче.
 6. Перейдите к экрану получения товара.
 
-Для демо-режима используются simulator devices, поэтому сценарий воспроизводим и не
-зависит от физического стенда.
+Так как это simulator mode, сценарий не зависит от настоящего купюроприемника или моторов.
 
-## 7. Что можно проверить в сервисном режиме
+## 6. Что можно делать в сервисном режиме
 
-На сервисном экране доступны fault injection и simulator actions:
+В сервисном режиме и simulator controls можно:
 
-- открыть или закрыть сервисную дверь;
-- поднять температуру;
-- вызвать `validator unavailable`;
+- открыть и закрыть сервисную дверь;
+- поднять или восстановить температуру;
+- включить `validator unavailable`;
 - вызвать `bill rejected`;
 - вызвать `bill jam`;
 - вызвать `partial payout`;
 - вызвать `motor fault`;
 - вызвать `inventory mismatch`;
-- вернуться в нормальный режим.
+- вернуться к нормальному состоянию.
 
-## 8. Что делать при ошибке
+Это полезно для проверки UX и защитной логики без реального стенда.
 
-Если продажа заблокирована:
+## 7. Где лежат рабочие данные
 
-1. Откройте экран диагностики.
+При запуске проект пишет состояние, базу и логи не в папку с кодом, а в пользовательский state root.
+
+Windows:
+
+- `%LOCALAPPDATA%\FlowerVendingSystem`
+
+Там обычно находятся:
+
+- `var\data` — база и runtime state;
+- `var\log` — журналы;
+- `docs` — копии документации для packaged build.
+
+## 8. Что делать, если продажа заблокирована
+
+1. Откройте diagnostics mode.
 2. Посмотрите список `sale blockers`.
-3. Перейдите в сервисный экран.
-4. Сбросьте fault-сценарии.
+3. Если включен fault-сценарий, откройте service mode.
+4. Сбросьте fault или верните нормальные условия.
 5. Повторите покупку.
 
-Если отображается recovery/restricted mode, значит система намеренно ограничила
-некоторые действия ради безопасного поведения.
+Типовые причины блокировки:
 
-## 9. Что пока не подтверждено
+- открыта сервисная дверь;
+- критическая температура;
+- неисправность валидатора;
+- неисправность мотора;
+- недостаточно безопасной сдачи;
+- inventory mismatch;
+- recovery/restricted mode.
 
-Приложение не заявляет о готовности реального железа. В текущую сборку не входит
-подтвержденная интеграция:
+## 9. Что уже подтверждено, а что нет
 
-- с реальным протоколом DBV-300-SD;
-- с реальной выдачей сдачи;
-- с реальным моторным контроллером и датчиками;
-- с production kiosk lock-down Windows/Linux;
-- с подтвержденными системными сервисами и watchdog на целевой машине.
+Подтверждено в software-only режиме:
 
-`pickup timeout` сейчас оставлен как явный placeholder-сценарий и не должен
-восприниматься как готовая логика для боевой установки.
+- запуск CLI;
+- запуск simulator runtime;
+- diagnostics mode;
+- service mode;
+- тесты и базовые runtime-сценарии;
+- kiosk-like UI слой;
+- deterministic simulator controls.
+
+Пока не подтверждено реальным железом:
+
+- настоящий DBV-300-SD protocol;
+- реальная выдача сдачи;
+- реальные моторы и датчики;
+- production watchdog;
+- production kiosk lockdown;
+- OS service/autostart deployment;
+- physical pickup/window sensing и стендовая проверка pickup timeout для боевого автомата.
+
+## 10. Если нужен самый быстрый ответ “работает ли проект”
+
+Используйте одну команду:
+
+```powershell
+python scripts\verify_project.py
+```
+
+Если она завершается успешно, значит текущая simulator-safe версия проекта работоспособна.

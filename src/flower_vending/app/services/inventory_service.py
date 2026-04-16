@@ -21,9 +21,6 @@ class InventoryService:
     def register_slot(self, slot: Slot) -> None:
         self._slots[slot.slot_id.value] = slot
 
-    def list_products(self) -> tuple[Product, ...]:
-        return tuple(self._products[product_id] for product_id in sorted(self._products.keys()))
-
     def list_slots(self) -> tuple[Slot, ...]:
         return tuple(self._slots[slot_id] for slot_id in sorted(self._slots.keys()))
 

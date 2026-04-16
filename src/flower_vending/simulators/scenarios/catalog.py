@@ -11,7 +11,7 @@ from flower_vending.simulators.scenarios.customer_flows import (
     run_insufficient_change_scenario,
     run_normal_sale_scenario,
     run_payment_cancelled_scenario,
-    run_pickup_timeout_placeholder_scenario,
+    run_pickup_timeout_scenario,
 )
 from flower_vending.simulators.scenarios.fault_flows import (
     run_bill_jam_scenario,
@@ -44,7 +44,7 @@ SCENARIO_REGISTRY: dict[str, ScenarioRunner] = {
     "door_open": run_door_open_scenario,
     "critical_temperature": run_critical_temperature_scenario,
     "inventory_mismatch": run_inventory_mismatch_scenario,
-    "pickup_timeout_placeholder": run_pickup_timeout_placeholder_scenario,
+    "pickup_timeout": run_pickup_timeout_scenario,
 }
 
 

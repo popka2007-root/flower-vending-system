@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from flower_vending.devices.contracts import TemperatureReading
+from flower_vending.devices.contracts import DeviceCommandPolicy, TemperatureReading
 from flower_vending.devices.interfaces import TemperatureSensor
 from flower_vending.simulators.devices.base import MockManagedDevice
 
 
 class MockTemperatureSensor(MockManagedDevice, TemperatureSensor):
-    def __init__(self, name: str = "mock_temperature_sensor", *, celsius: float = 4.0) -> None:
-        super().__init__(name)
+    def __init__(
+        self,
+        name: str = "mock_temperature_sensor",
+        *,
+        celsius: float = 4.0,
+        command_policy: DeviceCommandPolicy | None = None,
+    ) -> None:
+        super().__init__(name, command_policy=command_policy)
         self._celsius = celsius
 
     def set_celsius(self, celsius: float) -> None:
