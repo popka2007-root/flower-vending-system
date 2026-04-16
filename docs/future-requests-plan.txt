@@ -1,43 +1,58 @@
-Flower Vending System - Future Requests Plan
-Date: 2026-04-16
-Branch context: codex/repository-cleanup-hardening
+Flower Vending System - план будущих запросов
+Дата: 2026-04-16
+Контекст ветки: codex/repository-cleanup-hardening
 
-Purpose
--------
-This file is a practical backlog for future Codex/GitHub requests. It preserves
-the cleanup, documentation, scripts, and product-readiness plans from the
-repository audit conversation without requiring the chat history.
+Назначение
+----------
+Этот файл - практичный backlog для следующих запросов к Codex/GitHub. Он
+сохраняет план cleanup, документации, scripts и product-readiness без
+необходимости поднимать историю чата.
 
-Current baseline
+Текущий baseline
 ----------------
-- The project is a strong simulator-first control platform.
-- The current PR removes tracked generated/legacy docs, empty placeholder
-  packages, and an empty tests fixture package.
-- Repository hygiene checks are wired into scripts/verify_project.py.
-- Hardware target documentation is sanitized and separated from generic example
-  config under config/targets/.
-- The repository is not production-hardware-ready until bench validation is
-  complete.
+- Проект уже является сильной simulator-first control platform.
+- Cleanup PR убрал tracked generated/legacy docs, пустые placeholder packages и
+  пустой tests fixture package.
+- Repository hygiene checks подключены в scripts/verify_project.py.
+- Verifier проверяет матрицу конфигов и smoke --help для CLI-команд.
+- simulator-ui поддерживает --reset-state для очистки demo SQLite state.
+- Hardware target documentation отделена от generic examples и лежит в
+  config/targets/.
+- Проект пока не production-hardware-ready: real hardware нужно подтверждать на
+  bench stand.
 
-Request 1: Merge cleanup PR
----------------------------
-Goal:
-- Merge PR #1 once reviewed.
+Что делать дальше простыми словами
+----------------------------------
+1. Сначала привести документацию в порядок: сделать docs/README.md, разложить
+   phase docs, RU guides, hardware docs и ADR по понятным папкам.
+2. Потом убрать тонкие .bat/.sh wrappers, которые просто повторяют
+   python -m flower_vending.
+3. После этого проверить sitecustomize.py и root flower_vending shim: оставить
+   только если они реально нужны для запуска.
+4. Затем добавить operator diagnostics: status --json и events --limit N.
+5. Потом улучшать packaging/release и CI matrix.
+6. Реальное железо трогать только после bench inventory и bench validation.
 
-Suggested prompt:
-- "Review PR #1, address any CI/review feedback, then merge it if checks pass."
+Запрос 1: Смержить cleanup PR
+-----------------------------
+Цель:
+- Смержить PR #1 после проверки.
 
-Expected checks:
+Готовый промт:
+- "Проверь PR #1, исправь CI/review feedback, затем смержи PR, если проверки
+  проходят."
+
+Ожидаемые проверки:
 - python scripts\verify_project.py
 - python -m ruff check .
 - python scripts\check_repository_hygiene.py
 
-Request 2: Documentation consolidation
---------------------------------------
-Goal:
-- Reorganize docs without losing meaning.
+Запрос 2: Консолидация документации
+-----------------------------------
+Цель:
+- Реорганизовать docs без потери смысла.
 
-Proposed structure:
+Предлагаемая структура:
 - docs/README.md
 - docs/overview/
 - docs/operations/
@@ -47,35 +62,38 @@ Proposed structure:
 - docs/adr/
 - docs/ru/
 
-Migration rules:
-- Preserve ADR files as the architectural decision log.
-- Move phase docs to architecture/phase-history/.
-- Split production readiness into software baseline and hardware readiness.
-- Move Russian guides under docs/ru/.
-- Keep DOCX as generated-only; do not track it.
-- Do not delete any file unless there is an old-path to new-section mapping.
+Правила миграции:
+- ADR оставить отдельным слоем архитектурных решений.
+- Phase docs перенести в docs/architecture/phase-history/.
+- Production readiness разделить на software baseline и hardware readiness.
+- Русскоязычные guides перенести в docs/ru/.
+- DOCX считать generated-only; не хранить в git.
+- Не удалять содержимое без mapping "старый файл -> новый раздел".
 
-Suggested prompt:
-- "Implement the docs consolidation plan from docs/future-requests-plan.txt.
-  Use git mv where possible and update all links."
+Готовый промт:
+- "Реализуй план консолидации документации из
+  docs/future-requests-plan.txt. Создай docs/README.md, перенеси phase docs в
+  docs/architecture/phase-history/, перенеси русские guides в docs/ru/, ADR
+  оставь отдельным слоем, обнови все ссылки в README/docs. Не удаляй содержимое
+  без mapping 'старый файл -> новый раздел'."
 
-Request 3: Scripts and launcher cleanup
----------------------------------------
-Goal:
-- Reduce duplicated .bat/.sh wrappers around python -m flower_vending.
+Запрос 3: Cleanup scripts и launcher
+------------------------------------
+Цель:
+- Уменьшить дублирование .bat/.sh wrappers вокруг python -m flower_vending.
 
-Keep:
+Оставить:
 - scripts/verify_project.py
 - scripts/ui_smoke_check.py
 - scripts/check_repository_hygiene.py
 - scripts/collect-linux-hardware-inventory.sh
 - scripts/collect-windows-hardware-inventory.ps1
 
-Fold into CLI:
-- scripts/reset-demo-and-run-ui.bat -> python -m flower_vending simulator-ui --reset-state
-  or python -m flower_vending reset-demo.
+Уже перенесено в CLI:
+- scripts/reset-demo-and-run-ui.bat теперь вызывает
+  python -m flower_vending simulator-ui --reset-state.
 
-Deprecate after README/docs migration:
+Удалять после миграции README/docs:
 - scripts/validate-config.bat
 - scripts/validate-config.sh
 - scripts/run-diagnostics.bat
@@ -87,155 +105,207 @@ Deprecate after README/docs migration:
 - scripts/run-simulator-ui.bat
 - scripts/run-simulator-ui.sh
 
-Decide later:
+Решить отдельно:
 - scripts/build-windows-release.bat
 - scripts/build-linux-release.sh
 - scripts/generate_project_documentation_docx.py
 
-Suggested prompt:
-- "Add simulator-ui --reset-state, migrate README/docs to unified CLI, then
-  remove deprecated thin wrapper scripts."
+Готовый промт:
+- "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
+  документацию на прямые команды python -m flower_vending, оставь только
+  packaging scripts и hardware inventory scripts, затем удали тонкие wrappers,
+  которые не дают platform-specific пользы. Запусти verify_project.py и ruff."
 
-Request 4: Developer experience and CI
---------------------------------------
-Goal:
-- Make the simulator-first workflow easier and harder to break.
+Запрос 4: Developer experience и CI
+-----------------------------------
+Цель:
+- Сделать simulator-first workflow проще и устойчивее.
 
-Actions:
-- Add config validation matrix for:
+Уже сделано:
+- Config validation matrix для:
   - config/examples/machine.simulator.yaml
   - config/examples/machine.windows.yaml
   - config/examples/machine.linux.yaml
   - config/targets/machine.debian13-target.yaml
-- Add CLI smoke tests for all subcommands and --help output.
-- Keep hardware checks out of required simulator-safe CI.
-- Consider Windows/Linux CI matrix after baseline is stable.
+- CLI smoke tests для всех subcommands и --help output.
 
-Suggested prompt:
-- "Add config matrix and CLI smoke tests to verify_project.py and CI."
+Осталось:
+- Не смешивать hardware bench checks с required simulator-safe CI.
+- После стабилизации добавить Windows/Linux CI matrix.
 
-Request 5: Compatibility shim review
-------------------------------------
-Goal:
-- Verify whether sitecustomize.py and root-level flower_vending shims are still
-  needed.
+Готовый промт:
+- "Добавь GitHub Actions matrix, которая запускает simulator-safe verification
+  на Windows и Linux. Hardware bench checks держи отдельным workflow и не делай
+  их required для simulator-safe release."
 
-Actions:
-- Test repo-root python -m flower_vending in a clean environment.
-- Test editable install and wheel install.
-- If root package shim is enough, remove sitecustomize.py.
-- Only remove flower_vending/__main__.py if python -m flower_vending still works
-  from repo root and installed package paths.
+Запрос 5: Проверка compatibility shims
+--------------------------------------
+Цель:
+- Понять, нужны ли sitecustomize.py и root-level flower_vending shims.
 
-Suggested prompt:
-- "Audit and safely simplify sitecustomize.py and the root flower_vending shim."
+Действия:
+- Проверить python -m flower_vending из repo root в чистом окружении.
+- Проверить editable install.
+- Проверить wheel-like/install path поведение.
+- Если root package shim достаточно, убрать sitecustomize.py.
+- Удалять flower_vending/__main__.py только если python -m flower_vending
+  продолжает работать из repo root и installed package paths.
 
-Request 6: Observability and operator diagnostics
--------------------------------------------------
-Goal:
-- Make support/debugging easier without reading raw logs.
+Готовый промт:
+- "Проверь python -m flower_vending из repo root, editable install и wheel-like
+  import paths. Реши, нужны ли sitecustomize.py и root flower_vending shim.
+  Удаляй только если все entrypoints продолжают работать."
 
-Actions:
-- Add python -m flower_vending status --json.
-- Add python -m flower_vending events --limit N.
-- Add service-mode health summary for devices, blockers, unresolved
-  transactions, and recent events.
-- Document log locations and diagnostics bundle workflow.
+Запрос 6: Observability и operator diagnostics
+----------------------------------------------
+Цель:
+- Упростить поддержку и диагностику без чтения raw logs.
 
-Suggested prompt:
-- "Add status/events CLI commands and update diagnostics docs."
+Действия:
+- Добавить python -m flower_vending status --json.
+- Добавить python -m flower_vending events --limit N.
+- Добавить service-mode health summary по devices, blockers, unresolved
+  transactions и recent events.
+- Задокументировать log locations и diagnostics bundle workflow.
 
-Request 7: UI/UX simulator polish
----------------------------------
-Goal:
-- Improve customer and operator flows while staying simulator-first.
+Готовый промт:
+- "Добавь команды python -m flower_vending status --json и events --limit N на
+  базе существующего SQLite state и event repositories. Добавь тесты и обнови
+  operations docs."
 
-Actions:
-- Improve exact-change-only, sale-blocked, pickup-timeout, refund, and manual
-  review states in the UI.
-- Improve service screen for device health and unresolved transactions.
-- Add UI screenshot smoke coverage for key states if practical.
+Запрос 7: UI/UX simulator polish
+--------------------------------
+Цель:
+- Улучшить customer/operator flows, сохранив simulator-first подход.
 
-Suggested prompt:
-- "Polish simulator UI fault and service states with presenter/viewmodel tests."
+Действия:
+- Улучшить состояния exact-change-only, sale-blocked, pickup-timeout, refund и
+  manual review в UI.
+- Улучшить service screen для device health и unresolved transactions.
+- По возможности добавить screenshot smoke coverage для ключевых UI states.
 
-Request 8: Packaging and release hardening
-------------------------------------------
-Goal:
-- Make release artifacts more predictable.
+Готовый промт:
+- "Улучши simulator UI fault/service states: exact-change-only, sale-blocked,
+  pickup-timeout, refund, manual review и service health screen. Покрой изменения
+  presenter/viewmodel tests и, если практично, UI screenshot smoke checks."
 
-Actions:
-- Make version source of truth consistent between pyproject.toml and
+Запрос 8: Packaging и release hardening
+---------------------------------------
+Цель:
+- Сделать release artifacts более предсказуемыми.
+
+Действия:
+- Сделать единый source of truth для версии между pyproject.toml и
   packaging/build_release.py.
-- Keep packaging/build_release.py as canonical release builder.
-- Add packaged smoke launch checks where feasible.
-- Keep release docs focused on simulator-safe artifacts until hardware is bench
-  confirmed.
+- Оставить packaging/build_release.py canonical release builder.
+- Добавить packaged smoke launch checks там, где это реально.
+- Release docs держать вокруг simulator-safe artifacts, пока hardware не
+  bench-confirmed.
 
-Suggested prompt:
-- "Harden packaging versioning and release docs around packaging/build_release.py."
+Готовый промт:
+- "Усиль packaging versioning и release docs вокруг packaging/build_release.py:
+  сделай единый source of truth для версии, сохрани simulator-safe release
+  boundary и добавь packaged smoke checks там, где это реально."
 
-Request 9: Hardware-readiness groundwork
-----------------------------------------
-Goal:
-- Prepare for real hardware without claiming production readiness.
+Запрос 9: Hardware-readiness groundwork
+---------------------------------------
+Цель:
+- Подготовиться к реальному железу, не заявляя production readiness.
 
-Actions:
-- Run the Windows inventory script before OS changes.
-- Run the Linux inventory script from a live USB or installed Debian target.
-- Build a device map for validator, payout, motors, delivery window, pickup
-  sensor, door sensor, temperature/cooling, and watchdog.
-- Capture DBV-300-SD traces using explicit operator-provided raw bytes only.
-- Add production adapters one device at a time behind explicit config flags.
+Действия:
+- Запустить Windows inventory script до изменения OS.
+- Запустить Linux inventory script с live USB или установленного Debian target.
+- Составить device map для validator, payout, motors, delivery window, pickup
+  sensor, door sensor, temperature/cooling и watchdog.
+- Снимать DBV-300-SD traces только из explicit operator-provided raw bytes.
+- Добавлять production adapters по одному устройству и только за явными config
+  flags.
 
-Do not do without bench hardware:
-- Implement production DBV protocol.
-- Enable real cash acceptance.
-- Implement real payout/motor/pickup sensor adapters.
-- Claim production-ready watchdog, service, or autostart behavior.
+Нельзя делать без bench hardware:
+- Реализовывать production DBV protocol.
+- Включать real cash acceptance.
+- Реализовывать реальные payout/motor/pickup sensor adapters.
+- Заявлять production-ready watchdog, service или autostart behavior.
 
-Suggested prompt:
-- "Use the hardware readiness docs and inventory scripts to prepare a bench
-  validation plan for DBV-300-SD."
+Готовый промт:
+- "Используя docs/hardware и config/targets/machine.debian13-target.yaml,
+  подготовь bench validation checklist для DBV-300-SD, payout, motors, sensors,
+  watchdog, kiosk lockdown, service/autostart и recovery. Не реализуй real
+  hardware behavior без bench evidence."
 
-Request 10: Product readiness levels
-------------------------------------
-Goal:
-- Make readiness claims explicit.
+Запрос 10: Product readiness levels
+-----------------------------------
+Цель:
+- Сделать readiness claims явными и проверяемыми.
 
-Readiness levels:
+Уровни готовности:
 - Simulator Ready
 - Bench Ready
 - Pilot Ready
 - Production Ready
 
-Actions:
-- Define acceptance criteria for each level.
-- Add operator workflows for refill, cash reconciliation, fault recovery,
-  manual review, and restart after power loss.
-- Keep real-money operation blocked until bench validation is complete.
+Действия:
+- Определить acceptance criteria для каждого уровня.
+- Добавить operator workflows: refill, cash reconciliation, fault recovery,
+  manual review и restart after power loss.
+- Блокировать real-money operation до bench validation.
 
-Suggested prompt:
-- "Add product readiness levels and acceptance criteria to docs."
+Готовый промт:
+- "Добавь product readiness levels и acceptance criteria в docs: Simulator
+  Ready, Bench Ready, Pilot Ready, Production Ready. Отдельно опиши operator
+  workflows для refill, cash reconciliation, fault recovery, manual review и
+  restart after power loss."
 
-Priority order
---------------
-1. Merge cleanup PR #1.
-2. Add docs/README.md and reorganize docs.
-3. Replace convenience wrapper docs with direct python -m flower_vending usage.
-4. Add simulator-ui reset-state support.
-5. Remove deprecated thin wrapper scripts.
-6. Add config matrix and CLI smoke tests.
-7. Review sitecustomize.py and root flower_vending shim.
-8. Add status/events observability commands.
-9. Harden packaging versioning/release docs.
-10. Start hardware inventory and bench validation planning.
+Приоритетный порядок
+--------------------
+1. Создать docs/README.md и разложить docs по папкам.
+2. Перевести README/docs с convenience wrappers на python -m flower_vending.
+3. Удалить deprecated thin wrapper scripts.
+4. Проверить sitecustomize.py и root flower_vending shim.
+5. Добавить status/events observability commands.
+6. Усилить packaging versioning и release docs.
+7. Добавить Windows/Linux simulator-safe CI matrix.
+8. Начать hardware inventory и bench validation planning.
+9. Улучшить simulator UI fault/service states.
+10. Описать product readiness acceptance criteria.
 
-General rules for future work
------------------------------
-- Preserve simulator-first value.
-- Do not mix hardware bench checks into required simulator-safe CI.
-- Do not remove docs without old-file to new-section mapping.
-- Do not claim hardware readiness without bench evidence.
-- Prefer python -m flower_vending for app behavior.
-- Keep shell/PowerShell scripts only when they use OS-specific host APIs.
+Готовые промты для другого чата
+-------------------------------
+Промт A - консолидация документации:
+- "Реализуй план консолидации документации из
+  docs/future-requests-plan.txt. Создай docs/README.md, перенеси phase docs в
+  docs/architecture/phase-history/, перенеси русские guides в docs/ru/, ADR
+  оставь отдельным слоем, обнови все ссылки в README/docs. Не удаляй содержимое
+  без mapping 'старый файл -> новый раздел'."
+
+Промт B - cleanup scripts:
+- "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
+  документацию на прямые команды python -m flower_vending, оставь только
+  packaging scripts и hardware inventory scripts, затем удали тонкие wrappers,
+  которые не дают platform-specific пользы. Запусти verify_project.py и ruff."
+
+Промт C - compatibility shims:
+- "Проверь python -m flower_vending из repo root, editable install и wheel-like
+  import paths. Реши, нужны ли sitecustomize.py и root flower_vending shim.
+  Удаляй только если все entrypoints продолжают работать."
+
+Промт D - observability:
+- "Добавь команды python -m flower_vending status --json и events --limit N на
+  базе существующего SQLite state и event repositories. Добавь тесты и обнови
+  operations docs."
+
+Промт E - hardware bench planning:
+- "Используя docs/hardware и config/targets/machine.debian13-target.yaml,
+  подготовь bench validation checklist для DBV-300-SD, payout, motors, sensors,
+  watchdog, kiosk lockdown, service/autostart и recovery. Не реализуй real
+  hardware behavior без bench evidence."
+
+Общие правила для будущей работы
+--------------------------------
+- Сохранять simulator-first ценность проекта.
+- Не смешивать hardware bench checks с required simulator-safe CI.
+- Не удалять docs без mapping "старый файл -> новый раздел".
+- Не заявлять hardware readiness без bench evidence.
+- Для app behavior предпочитать python -m flower_vending.
+- Shell/PowerShell scripts оставлять только там, где они реально используют
+  OS-specific host APIs.

@@ -1,84 +1,92 @@
 # Flower Vending System
 
-Simulator-first control platform for a flower vending machine.
+Simulator-first control platform для flower vending machine.
 
-This repository now supports a production-like software baseline that can be run
-without real hardware:
+Проект уже содержит production-like software baseline, который можно запускать
+без реального железа:
 
-- platform-neutral domain/application core and FSM;
-- deterministic simulator devices with fault injection;
-- kiosk UI wired through presenters/view-models and simulator controls;
-- unified `python -m flower_vending ...` entrypoints;
-- bootstrap checks, config validation, seed demo catalog, and SQLite runtime state;
-- Windows/Linux platform abstraction modules with explicit extension points;
-- automated tests for simulator scenarios, startup, diagnostics, service mode, and recovery-safe behavior.
+- platform-neutral domain/application core и FSM;
+- deterministic simulator devices с fault injection;
+- kiosk UI через presenters/view-models и simulator controls;
+- единые entrypoints через `python -m flower_vending ...`;
+- bootstrap checks, config validation, seed demo catalog и SQLite runtime state;
+- Windows/Linux platform abstraction modules с явными extension points;
+- automated tests для simulator scenarios, startup, diagnostics, service mode и
+  recovery-safe behavior.
 
-Real hardware protocols are still intentionally **not claimed as complete**.
-DBV-300-SD framing/commands, payout hardware, motors, sensors, watchdogs, kiosk
-lockdown, services, and autostart remain extension points until bench-confirmed.
-See [Production Readiness Boundary](docs/production-readiness.md) for the
-simulator-ready, pilot-release-gate, and hardware-bench-required split.
+Реальные hardware protocols пока **не считаются завершёнными**. DBV-300-SD
+framing/commands, payout hardware, motors, sensors, watchdogs, kiosk lockdown,
+services и autostart остаются extension points до bench confirmation. Граница
+готовности описана в [Production Readiness Boundary](docs/production-readiness.md).
 
-## Quick Start
+## Быстрый Старт
 
-Install dependencies on a clean machine:
+Установить зависимости:
 
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m pip install -r requirements-ui.txt
 ```
 
-Optional editable install still works when backend dependencies are reachable:
+Опционально можно поставить editable install:
 
 ```powershell
 python -m pip install -e ".[dev,ui]"
 ```
 
-Validate config and prepare runtime directories:
+Проверить config и подготовить runtime directories:
 
 ```powershell
 python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
 ```
 
-Run the simulator runtime:
+Запустить simulator runtime:
 
 ```powershell
 python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
 ```
 
-Open diagnostics:
+Открыть diagnostics:
 
 ```powershell
 python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
 ```
 
-Open service mode snapshot:
+Открыть service mode snapshot:
 
 ```powershell
 python -m flower_vending service --config config\examples\machine.simulator.yaml
 ```
 
-Launch the simulator UI:
+Запустить simulator UI:
 
 ```powershell
 python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
 ```
 
+Очистить persisted demo SQLite database и сразу запустить UI:
+
+```powershell
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
+```
+
 ## Desktop Releases
 
-End users do not need to install Python for packaged desktop builds.
+Для packaged desktop builds пользователю не нужен установленный Python.
 
 Windows release outputs:
 
-- `FlowerVendingSimulator-Windows-x64.exe` - portable single-file app with bundled Python runtime;
-- `FlowerVendingSimulator-Setup-Windows-x64.exe` - optional installer build for desktop deployment.
+- `FlowerVendingSimulator-Windows-x64.exe` - portable single-file app с bundled
+  Python runtime;
+- `FlowerVendingSimulator-Setup-Windows-x64.exe` - installer build для desktop
+  deployment.
 
 Linux release outputs:
 
 - `FlowerVendingSimulator-Linux-x86_64.AppImage` - single-file Linux desktop app;
 - `FlowerVendingSimulator-Linux-x86_64.tar.gz` - fallback self-contained bundle.
 
-Build locally:
+Собрать локально:
 
 ```powershell
 scripts\build-windows-release.bat
@@ -88,9 +96,9 @@ scripts\build-windows-release.bat
 ./scripts/build-linux-release.sh /path/to/appimagetool
 ```
 
-GitHub release automation is prepared in `.github/workflows/build-release.yml`.
-Pushing a tag like `v0.1.0` builds Windows and Linux artifacts and publishes them
-to GitHub Releases.
+GitHub release automation находится в `.github/workflows/build-release.yml`.
+Push tag вида `v0.1.2` собирает Windows/Linux artifacts и публикует их в
+GitHub Releases.
 
 Windows convenience scripts:
 
@@ -113,49 +121,54 @@ Linux convenience scripts:
 ./scripts/run-simulator-ui.sh
 ```
 
+Эти convenience scripts постепенно стоит заменять прямыми командами
+`python -m flower_vending ...`, если они не дают platform-specific пользы.
+
 ## Verification
 
-Run the project verification suite with one command:
+Запустить весь simulator-safe verification suite:
 
 ```powershell
 python scripts\verify_project.py
 ```
 
-This verifies:
+Verifier проверяет:
 
-- config validation;
+- config validation для simulator, Windows, Linux и Debian target YAML files;
+- CLI help smoke checks для всех unified entrypoints;
 - compile step;
 - pytest-based unit/integration/recovery tests;
+- UI smoke check;
 - diagnostics mode smoke test;
 - focused runtime scenarios.
 
 ## Simulator UX
 
-The simulator UI and service mode support:
+Simulator UI и service mode поддерживают:
 
-- browse a Russian demo catalog with storefront product cards and local flower images;
-- start cash checkout;
-- quick-insert bills from the payment screen;
+- русский demo catalog с product cards и локальными flower images;
+- cash checkout;
+- quick-insert bills на payment screen;
 - open/close service door;
 - raise/restore temperature;
-- trigger bill rejected / bill jam / validator unavailable;
-- trigger payout unavailable / partial payout;
-- trigger motor fault;
-- trigger inventory mismatch;
-- force pickup timeout now to close the delivery window and enter recovery/manual review.
+- bill rejected / bill jam / validator unavailable faults;
+- payout unavailable / partial payout faults;
+- motor fault;
+- inventory mismatch;
+- forced pickup timeout, который закрывает delivery window и переводит систему в
+  recovery/manual review.
 
-Recent domain events are visible in diagnostics, and runtime logs include FSM
-transitions plus correlation/transaction identifiers.
+Recent domain events видны в diagnostics. Runtime logs содержат FSM transitions,
+correlation identifiers и transaction identifiers.
 
-The demo catalog in `config/examples/machine.simulator.yaml` uses local product
-assets from `src/flower_vending/ui/assets/products/`; release packaging includes
-these assets for Windows and Linux builds.
+Demo catalog в `config/examples/machine.simulator.yaml` использует локальные
+assets из `src/flower_vending/ui/assets/products/`; release packaging включает
+эти assets для Windows и Linux builds.
 
-If the simulator UI still shows an older persisted demo catalog from local
-runtime state, use `scripts\reset-demo-and-run-ui.bat` to clear the simulator
-database and launch the storefront UI with the current demo catalog.
+Если UI показывает старый persisted demo catalog, запусти UI с `--reset-state`.
+Это очистит simulator database и поднимет storefront UI с актуальным demo catalog.
 
-## Documentation
+## Документация
 
 - [Production Readiness Boundary](docs/production-readiness.md)
 - [Operations Runbook](docs/operations-runbook.md)
@@ -165,20 +178,34 @@ database and launch the storefront UI with the current demo catalog.
 - [Developer Guide (RU)](docs/developer-guide-ru.md)
 - [Technical Guide (RU)](docs/technical-guide-ru.md)
 - [Debian 13 Target Hardware Assessment](docs/hardware/debian13-target-assessment.md)
+- [План будущих запросов](docs/future-requests-plan.txt)
 
 ## Hardware-Dependent Gaps
 
-The following still require target hardware confirmation:
+Следующее требует target hardware confirmation:
 
 - DBV-300-SD command frames, acknowledgements, denomination/event mapping,
-  escrow behavior, transport timings, and restart recovery;
+  escrow behavior, transport timings и restart recovery;
 - real payout hardware integration, physical reconciliation, partial-payout
-  evidence, and cash accounting procedures;
-- motor/controller protocol details, home/jam feedback, and product-drop
+  evidence и cash accounting procedures;
+- motor/controller protocol details, home/jam feedback и product-drop
   confirmation;
-- physical delivery-window and pickup confirmation sensors beyond the
-  simulator-safe pickup timeout coordinator;
-- temperature, door, inventory, and position sensor calibration on the target
-  cabinet;
-- kiosk shell lockdown on the target Windows/Linux image;
-- OS service, autostart, and watchdog deployment wiring.
+- physical delivery-window и pickup confirmation sensors сверх simulator-safe
+  pickup timeout coordinator;
+- temperature, door, inventory и position sensor calibration на target cabinet;
+- kiosk shell lockdown на target Windows/Linux image;
+- OS service, autostart и watchdog deployment wiring.
+
+## Куда Двигаться Дальше
+
+Короткий порядок развития:
+
+1. Привести docs в порядок: `docs/README.md`, `docs/architecture/`,
+   `docs/operations/`, `docs/hardware/`, `docs/ru/`.
+2. Убрать thin `.bat/.sh` wrappers после перевода README/docs на
+   `python -m flower_vending`.
+3. Проверить `sitecustomize.py` и root `flower_vending/` shim.
+4. Добавить operator diagnostics: `status --json` и `events --limit N`.
+5. Усилить packaging versioning и release docs.
+6. Добавить Windows/Linux simulator-safe CI matrix.
+7. Реальное железо подключать только после bench inventory и bench validation.
