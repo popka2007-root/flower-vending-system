@@ -97,7 +97,7 @@ scripts\build-windows-release.bat
 ```
 
 GitHub release automation находится в `.github/workflows/build-release.yml`.
-Push tag вида `v0.1.2` собирает Windows/Linux artifacts и публикует их в
+Push tag вида `v0.1.3` собирает Windows/Linux artifacts и публикует их в
 GitHub Releases.
 
 Windows convenience scripts:
