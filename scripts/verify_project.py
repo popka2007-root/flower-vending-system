@@ -154,6 +154,10 @@ def main() -> int:
         [sys.executable, "-m", "compileall", "-q", "src", "tests"],
     )
     checks_ok &= _run_command(
+        "repository hygiene check",
+        [sys.executable, "scripts/check_repository_hygiene.py"],
+    )
+    checks_ok &= _run_command(
         "UI smoke check",
         [sys.executable, "scripts/ui_smoke_check.py"],
     )

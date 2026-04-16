@@ -262,21 +262,12 @@ Cross-cutting technical adapters: SQLite, logging, config, startup, telemetry si
 
 Cash-session orchestration helpers, change management, accounting policies, and future settlement extension points.
 
-### `src/flower_vending/inventory`
+### Removed empty bounded-context placeholders
 
-Inventory-specific services, policies, and drift handling that do not belong to generic domain primitives.
-
-### `src/flower_vending/vending`
-
-Vend execution policies, pickup semantics, and safe delivery coordination.
-
-### `src/flower_vending/cooling`
-
-Cooling supervision policies and temperature-driven sales blocking behavior.
-
-### `src/flower_vending/telemetry`
-
-Machine health projection, service audit semantics, and domain-level observability models.
+Vend execution is currently implemented through `app/orchestrators/`,
+`devices/`, and simulator devices. Inventory, cooling, telemetry, and vending
+behavior currently live in the implemented domain/app/device/simulator modules.
+The old empty bounded-context placeholder packages were removed during cleanup.
 
 ### `src/flower_vending/ui`
 
@@ -298,7 +289,7 @@ Deterministic mocks, fault injection, and scenario runners for headless testing 
 
 ### Linux/Windows specific
 
-The following are intentionally platform-specific and live under `src/flower_vending/infrastructure/platform/`:
+The following are intentionally platform-specific and live under `src/flower_vending/platform/`:
 
 - kiosk shell integration;
 - service hosting;
@@ -318,7 +309,7 @@ The following remain platform-neutral in contract but connect to hardware-specif
 
 - deterministic device doubles live in `src/flower_vending/simulators/devices/`
 - scenario scripts live in `src/flower_vending/simulators/scenarios/`
-- reusable sample input and journal fixtures live in `tests/fixtures/`
+- reusable simulator helpers currently live in `tests/_support.py`
 
 ## Where COM3 is handled
 

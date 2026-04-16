@@ -164,6 +164,7 @@ database and launch the storefront UI with the current demo catalog.
 - [User Guide (RU)](docs/user-guide-ru.md)
 - [Developer Guide (RU)](docs/developer-guide-ru.md)
 - [Technical Guide (RU)](docs/technical-guide-ru.md)
+- [Debian 13 Target Hardware Assessment](docs/hardware/debian13-target-assessment.md)
 
 ## Hardware-Dependent Gaps
 
