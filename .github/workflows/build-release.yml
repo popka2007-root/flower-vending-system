@@ -23,6 +23,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install Qt runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0
       - name: Install simulator-safe quality dependencies
         run: |
           python -m pip install --upgrade pip
@@ -76,7 +80,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y desktop-file-utils libglib2.0-bin patchelf
+          sudo apt-get install -y desktop-file-utils libegl1 libgl1 libglib2.0-bin libxkbcommon0 patchelf
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
