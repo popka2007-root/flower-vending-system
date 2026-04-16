@@ -50,7 +50,7 @@
 python -m flower_vending
 ```
 
-CLI определен в [src/flower_vending/runtime/cli.py](/C:/Users/User/Desktop/flower-vending-system/src/flower_vending/runtime/cli.py).
+CLI определен в `src/flower_vending/runtime/cli.py`.
 
 Главные команды:
 
@@ -60,7 +60,7 @@ CLI определен в [src/flower_vending/runtime/cli.py](/C:/Users/User/Des
 - `simulator-runtime` — runtime без UI или запуск детерминированных сценариев;
 - `simulator-ui` — kiosk UI.
 
-Bootstrap и сборка runtime происходят в [src/flower_vending/runtime/bootstrap.py](/C:/Users/User/Desktop/flower-vending-system/src/flower_vending/runtime/bootstrap.py).
+Bootstrap и сборка runtime происходят в `src/flower_vending/runtime/bootstrap.py`.
 
 ## 5. Как проверить проект после изменений
 
@@ -153,13 +153,13 @@ python -m flower_vending simulator-runtime --config config\examples\machine.simu
 
 Рекомендуемый порядок входа:
 
-1. [README.md](/C:/Users/User/Desktop/flower-vending-system/README.md)
-2. [docs/operations-runbook.md](/C:/Users/User/Desktop/flower-vending-system/docs/operations-runbook.md)
-3. [docs/project-documentation-ru.md](/C:/Users/User/Desktop/flower-vending-system/docs/project-documentation-ru.md)
-4. [src/flower_vending/runtime/cli.py](/C:/Users/User/Desktop/flower-vending-system/src/flower_vending/runtime/cli.py)
-5. [src/flower_vending/runtime/bootstrap.py](/C:/Users/User/Desktop/flower-vending-system/src/flower_vending/runtime/bootstrap.py)
-6. [tests/integration/test_runtime_modes.py](/C:/Users/User/Desktop/flower-vending-system/tests/integration/test_runtime_modes.py)
-7. [tests/integration/test_simulator_scenarios.py](/C:/Users/User/Desktop/flower-vending-system/tests/integration/test_simulator_scenarios.py)
+1. `README.md`
+2. `docs/operations-runbook.md`
+3. `docs/project-documentation-ru.md`
+4. `src/flower_vending/runtime/cli.py`
+5. `src/flower_vending/runtime/bootstrap.py`
+6. `tests/integration/test_runtime_modes.py`
+7. `tests/integration/test_simulator_scenarios.py`
 
 Так быстрее всего понять реальный исполняемый контур проекта.
 

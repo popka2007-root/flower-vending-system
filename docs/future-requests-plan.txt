@@ -1,0 +1,241 @@
+Flower Vending System - Future Requests Plan
+Date: 2026-04-16
+Branch context: codex/repository-cleanup-hardening
+
+Purpose
+-------
+This file is a practical backlog for future Codex/GitHub requests. It preserves
+the cleanup, documentation, scripts, and product-readiness plans from the
+repository audit conversation without requiring the chat history.
+
+Current baseline
+----------------
+- The project is a strong simulator-first control platform.
+- The current PR removes tracked generated/legacy docs, empty placeholder
+  packages, and an empty tests fixture package.
+- Repository hygiene checks are wired into scripts/verify_project.py.
+- Hardware target documentation is sanitized and separated from generic example
+  config under config/targets/.
+- The repository is not production-hardware-ready until bench validation is
+  complete.
+
+Request 1: Merge cleanup PR
+---------------------------
+Goal:
+- Merge PR #1 once reviewed.
+
+Suggested prompt:
+- "Review PR #1, address any CI/review feedback, then merge it if checks pass."
+
+Expected checks:
+- python scripts\verify_project.py
+- python -m ruff check .
+- python scripts\check_repository_hygiene.py
+
+Request 2: Documentation consolidation
+--------------------------------------
+Goal:
+- Reorganize docs without losing meaning.
+
+Proposed structure:
+- docs/README.md
+- docs/overview/
+- docs/operations/
+- docs/architecture/
+- docs/architecture/phase-history/
+- docs/hardware/
+- docs/adr/
+- docs/ru/
+
+Migration rules:
+- Preserve ADR files as the architectural decision log.
+- Move phase docs to architecture/phase-history/.
+- Split production readiness into software baseline and hardware readiness.
+- Move Russian guides under docs/ru/.
+- Keep DOCX as generated-only; do not track it.
+- Do not delete any file unless there is an old-path to new-section mapping.
+
+Suggested prompt:
+- "Implement the docs consolidation plan from docs/future-requests-plan.txt.
+  Use git mv where possible and update all links."
+
+Request 3: Scripts and launcher cleanup
+---------------------------------------
+Goal:
+- Reduce duplicated .bat/.sh wrappers around python -m flower_vending.
+
+Keep:
+- scripts/verify_project.py
+- scripts/ui_smoke_check.py
+- scripts/check_repository_hygiene.py
+- scripts/collect-linux-hardware-inventory.sh
+- scripts/collect-windows-hardware-inventory.ps1
+
+Fold into CLI:
+- scripts/reset-demo-and-run-ui.bat -> python -m flower_vending simulator-ui --reset-state
+  or python -m flower_vending reset-demo.
+
+Deprecate after README/docs migration:
+- scripts/validate-config.bat
+- scripts/validate-config.sh
+- scripts/run-diagnostics.bat
+- scripts/run-diagnostics.sh
+- scripts/run-service-mode.bat
+- scripts/run-service-mode.sh
+- scripts/run-simulator-runtime.bat
+- scripts/run-simulator-runtime.sh
+- scripts/run-simulator-ui.bat
+- scripts/run-simulator-ui.sh
+
+Decide later:
+- scripts/build-windows-release.bat
+- scripts/build-linux-release.sh
+- scripts/generate_project_documentation_docx.py
+
+Suggested prompt:
+- "Add simulator-ui --reset-state, migrate README/docs to unified CLI, then
+  remove deprecated thin wrapper scripts."
+
+Request 4: Developer experience and CI
+--------------------------------------
+Goal:
+- Make the simulator-first workflow easier and harder to break.
+
+Actions:
+- Add config validation matrix for:
+  - config/examples/machine.simulator.yaml
+  - config/examples/machine.windows.yaml
+  - config/examples/machine.linux.yaml
+  - config/targets/machine.debian13-target.yaml
+- Add CLI smoke tests for all subcommands and --help output.
+- Keep hardware checks out of required simulator-safe CI.
+- Consider Windows/Linux CI matrix after baseline is stable.
+
+Suggested prompt:
+- "Add config matrix and CLI smoke tests to verify_project.py and CI."
+
+Request 5: Compatibility shim review
+------------------------------------
+Goal:
+- Verify whether sitecustomize.py and root-level flower_vending shims are still
+  needed.
+
+Actions:
+- Test repo-root python -m flower_vending in a clean environment.
+- Test editable install and wheel install.
+- If root package shim is enough, remove sitecustomize.py.
+- Only remove flower_vending/__main__.py if python -m flower_vending still works
+  from repo root and installed package paths.
+
+Suggested prompt:
+- "Audit and safely simplify sitecustomize.py and the root flower_vending shim."
+
+Request 6: Observability and operator diagnostics
+-------------------------------------------------
+Goal:
+- Make support/debugging easier without reading raw logs.
+
+Actions:
+- Add python -m flower_vending status --json.
+- Add python -m flower_vending events --limit N.
+- Add service-mode health summary for devices, blockers, unresolved
+  transactions, and recent events.
+- Document log locations and diagnostics bundle workflow.
+
+Suggested prompt:
+- "Add status/events CLI commands and update diagnostics docs."
+
+Request 7: UI/UX simulator polish
+---------------------------------
+Goal:
+- Improve customer and operator flows while staying simulator-first.
+
+Actions:
+- Improve exact-change-only, sale-blocked, pickup-timeout, refund, and manual
+  review states in the UI.
+- Improve service screen for device health and unresolved transactions.
+- Add UI screenshot smoke coverage for key states if practical.
+
+Suggested prompt:
+- "Polish simulator UI fault and service states with presenter/viewmodel tests."
+
+Request 8: Packaging and release hardening
+------------------------------------------
+Goal:
+- Make release artifacts more predictable.
+
+Actions:
+- Make version source of truth consistent between pyproject.toml and
+  packaging/build_release.py.
+- Keep packaging/build_release.py as canonical release builder.
+- Add packaged smoke launch checks where feasible.
+- Keep release docs focused on simulator-safe artifacts until hardware is bench
+  confirmed.
+
+Suggested prompt:
+- "Harden packaging versioning and release docs around packaging/build_release.py."
+
+Request 9: Hardware-readiness groundwork
+----------------------------------------
+Goal:
+- Prepare for real hardware without claiming production readiness.
+
+Actions:
+- Run the Windows inventory script before OS changes.
+- Run the Linux inventory script from a live USB or installed Debian target.
+- Build a device map for validator, payout, motors, delivery window, pickup
+  sensor, door sensor, temperature/cooling, and watchdog.
+- Capture DBV-300-SD traces using explicit operator-provided raw bytes only.
+- Add production adapters one device at a time behind explicit config flags.
+
+Do not do without bench hardware:
+- Implement production DBV protocol.
+- Enable real cash acceptance.
+- Implement real payout/motor/pickup sensor adapters.
+- Claim production-ready watchdog, service, or autostart behavior.
+
+Suggested prompt:
+- "Use the hardware readiness docs and inventory scripts to prepare a bench
+  validation plan for DBV-300-SD."
+
+Request 10: Product readiness levels
+------------------------------------
+Goal:
+- Make readiness claims explicit.
+
+Readiness levels:
+- Simulator Ready
+- Bench Ready
+- Pilot Ready
+- Production Ready
+
+Actions:
+- Define acceptance criteria for each level.
+- Add operator workflows for refill, cash reconciliation, fault recovery,
+  manual review, and restart after power loss.
+- Keep real-money operation blocked until bench validation is complete.
+
+Suggested prompt:
+- "Add product readiness levels and acceptance criteria to docs."
+
+Priority order
+--------------
+1. Merge cleanup PR #1.
+2. Add docs/README.md and reorganize docs.
+3. Replace convenience wrapper docs with direct python -m flower_vending usage.
+4. Add simulator-ui reset-state support.
+5. Remove deprecated thin wrapper scripts.
+6. Add config matrix and CLI smoke tests.
+7. Review sitecustomize.py and root flower_vending shim.
+8. Add status/events observability commands.
+9. Harden packaging versioning/release docs.
+10. Start hardware inventory and bench validation planning.
+
+General rules for future work
+-----------------------------
+- Preserve simulator-first value.
+- Do not mix hardware bench checks into required simulator-safe CI.
+- Do not remove docs without old-file to new-section mapping.
+- Do not claim hardware readiness without bench evidence.
+- Prefer python -m flower_vending for app behavior.
+- Keep shell/PowerShell scripts only when they use OS-specific host APIs.

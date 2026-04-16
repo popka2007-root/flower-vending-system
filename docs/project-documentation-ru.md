@@ -2,7 +2,7 @@
 
 Полная проектная документация и руководство по передаче проекта.
 
-Проект: `C:\Users\User\Downloads\flower-vending-system`
+Проект: `flower-vending-system`
 
 Этот документ объясняет проект от начала до конца: назначение, архитектуру, слои, денежный поток, работу со сдачей, JCM DBV-300-SD, симуляторы, тесты, запуск проверки, текущие ограничения и план доведения до реального промышленного автомата.
 
@@ -23,7 +23,7 @@ Flower Vending System — это production-oriented основа програм
 Откройте PowerShell:
 
 ```powershell
-cd C:\Users\User\Downloads\flower-vending-system
+cd flower-vending-system
 python scripts\verify_project.py
 ```
 
@@ -73,7 +73,7 @@ Verification finished successfully.
 - `app` содержит use cases, orchestration, FSM, command/event bus, health monitor и recovery decisions. Этот слой управляет процессом продажи, но не знает деталей фреймов DBV-300-SD.
 - `devices` содержит интерфейсы устройств и адаптеры. Здесь живут BillValidator, ChangeDispenser, MotorController, CoolingController, WindowController, sensors и WatchdogAdapter.
 - `infrastructure` содержит SQLite, repositories, transaction journal, config loader, structured logging, serial/MDB transport и platform-specific adapters.
-- `payments`, `inventory`, `vending`, `cooling` выделяют доменные подсистемы и application services.
+- `payments` содержит реализованную подсистему расчета сдачи; inventory, vending, cooling и telemetry сейчас реализованы через domain/app/devices/simulators, без пустых placeholder-пакетов.
 - `ui` содержит presenters/view models/screens. UI не должен напрямую управлять железом или менять доменные объекты.
 - `simulators` содержит mock devices, deterministic сценарии и fault injection.
 - `tests` проверяет domain, application, integration и recovery cases.

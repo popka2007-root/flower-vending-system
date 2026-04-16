@@ -31,7 +31,7 @@
 Если у вас проект открыт из исходников:
 
 ```powershell
-cd C:\Users\User\Desktop\flower-vending-system
+cd flower-vending-system
 python scripts\verify_project.py
 ```
 

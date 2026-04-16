@@ -18,4 +18,5 @@ var/
 *.log
 .coverage
 coverage.xml
+docs/flower-vending-system-project-documentation.docx
 ~$*.docx
