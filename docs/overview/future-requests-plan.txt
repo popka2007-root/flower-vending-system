@@ -197,6 +197,10 @@ Flower Vending System - план будущих запросов
 
 Запрос 9: Hardware-readiness groundwork
 ---------------------------------------
+Статус: частично выполнено: bench validation checklist добавлен в
+docs/hardware/bench-validation-checklist.md. Фактические inventory/bench runs
+остаются задачами для физического стенда.
+
 Цель:
 - Подготовиться к реальному железу, не заявляя production readiness.
 
@@ -215,11 +219,11 @@ Flower Vending System - план будущих запросов
 - Реализовывать реальные payout/motor/pickup sensor adapters.
 - Заявлять production-ready watchdog, service или autostart behavior.
 
-Готовый промт:
-- "Используя docs/hardware и config/targets/machine.debian13-target.yaml,
-  подготовь bench validation checklist для DBV-300-SD, payout, motors, sensors,
-  watchdog, kiosk lockdown, service/autostart и recovery. Не реализуй real
-  hardware behavior без bench evidence."
+Готовый промт для продолжения на физическом стенде:
+- "Пройди docs/hardware/bench-validation-checklist.md на реальном cabinet:
+  собери Windows/Linux inventory, фото, stable device paths, DBV raw traces и
+  recovery evidence. Не реализуй adapters, пока соответствующий раздел
+  checklist не закрыт доказательствами."
 
 Запрос 10: Product readiness levels
 -----------------------------------
@@ -248,7 +252,7 @@ Flower Vending System - план будущих запросов
 --------------------
 1. Усилить packaging versioning и release docs.
 2. Добавить Windows/Linux simulator-safe CI matrix.
-3. Начать hardware inventory и bench validation planning.
+3. Провести hardware inventory и bench validation на физическом стенде.
 4. Улучшить simulator UI fault/service states.
 5. Описать product readiness acceptance criteria.
 6. Провести повторный docs link/hygiene audit после следующего крупного PR.
@@ -275,11 +279,11 @@ Flower Vending System - план будущих запросов
   читать SQLite state без запуска simulator runtime. Добавь недостающие поля
   только если они уже есть в persistence layer."
 
-Промт E - hardware bench planning:
-- "Используя docs/hardware и config/targets/machine.debian13-target.yaml,
-  подготовь bench validation checklist для DBV-300-SD, payout, motors, sensors,
-  watchdog, kiosk lockdown, service/autostart и recovery. Не реализуй real
-  hardware behavior без bench evidence."
+Промт E - hardware bench execution:
+- "Пройди docs/hardware/bench-validation-checklist.md на реальном cabinet:
+  собери Windows/Linux inventory, фото, stable device paths, DBV raw traces и
+  recovery evidence. Не реализуй adapters, пока соответствующий раздел
+  checklist не закрыт доказательствами."
 
 Общие правила для будущей работы
 --------------------------------

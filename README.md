@@ -97,7 +97,7 @@ scripts\build-windows-release.bat
 ```
 
 GitHub release automation находится в `.github/workflows/build-release.yml`.
-Push tag вида `v0.1.4` собирает Windows/Linux artifacts и публикует их в
+Push tag вида `v0.1.5` собирает Windows/Linux artifacts и публикует их в
 GitHub Releases.
 
 ## Unified CLI
@@ -184,6 +184,7 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 - [User Guide (RU)](docs/ru/user-guide.md)
 - [Developer Guide (RU)](docs/ru/developer-guide.md)
 - [Technical Guide (RU)](docs/ru/technical-guide.md)
+- [Hardware Bench Validation Checklist](docs/hardware/bench-validation-checklist.md)
 - [Debian 13 Target Hardware Assessment](docs/hardware/debian13-target-assessment.md)
 - [План будущих запросов](docs/overview/future-requests-plan.txt)
 
