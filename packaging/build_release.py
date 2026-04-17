@@ -20,7 +20,7 @@ ASSETS = ROOT / "packaging" / "assets"
 WINDOWS_ISS = ROOT / "packaging" / "windows" / "FlowerVendingSimulator.iss"
 APP_NAME = "FlowerVendingSimulator"
 APP_SLUG = "flower-vending-simulator"
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 
 def main(argv: list[str] | None = None) -> int:
