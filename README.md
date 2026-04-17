@@ -17,7 +17,7 @@ Simulator-first control platform для flower vending machine.
 Реальные hardware protocols пока **не считаются завершёнными**. DBV-300-SD
 framing/commands, payout hardware, motors, sensors, watchdogs, kiosk lockdown,
 services и autostart остаются extension points до bench confirmation. Граница
-готовности описана в [Production Readiness Boundary](docs/production-readiness.md).
+готовности описана в [Production Readiness Boundary](docs/overview/production-readiness.md).
 
 ## Быстрый Старт
 
@@ -170,15 +170,16 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 
 ## Документация
 
-- [Production Readiness Boundary](docs/production-readiness.md)
-- [Operations Runbook](docs/operations-runbook.md)
-- [Platform Abstractions](docs/platform-abstractions.md)
-- [Project Documentation (RU)](docs/project-documentation-ru.md)
-- [User Guide (RU)](docs/user-guide-ru.md)
-- [Developer Guide (RU)](docs/developer-guide-ru.md)
-- [Technical Guide (RU)](docs/technical-guide-ru.md)
+- [Docs Index](docs/README.md)
+- [Production Readiness Boundary](docs/overview/production-readiness.md)
+- [Operations Runbook](docs/operations/runbook.md)
+- [Platform Abstractions](docs/architecture/platform-abstractions.md)
+- [Project Documentation (RU)](docs/ru/project-documentation.md)
+- [User Guide (RU)](docs/ru/user-guide.md)
+- [Developer Guide (RU)](docs/ru/developer-guide.md)
+- [Technical Guide (RU)](docs/ru/technical-guide.md)
 - [Debian 13 Target Hardware Assessment](docs/hardware/debian13-target-assessment.md)
-- [План будущих запросов](docs/future-requests-plan.txt)
+- [План будущих запросов](docs/overview/future-requests-plan.txt)
 
 ## Hardware-Dependent Gaps
 
@@ -200,12 +201,10 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 
 Короткий порядок развития:
 
-1. Привести docs в порядок: `docs/README.md`, `docs/architecture/`,
-   `docs/operations/`, `docs/hardware/`, `docs/ru/`.
-2. Убрать thin `.bat/.sh` wrappers после перевода README/docs на
+1. Убрать thin `.bat/.sh` wrappers после перевода README/docs на
    `python -m flower_vending`.
-3. Проверить `sitecustomize.py` и root `flower_vending/` shim.
-4. Добавить operator diagnostics: `status --json` и `events --limit N`.
-5. Усилить packaging versioning и release docs.
-6. Добавить Windows/Linux simulator-safe CI matrix.
-7. Реальное железо подключать только после bench inventory и bench validation.
+2. Проверить `sitecustomize.py` и root `flower_vending/` shim.
+3. Добавить operator diagnostics: `status --json` и `events --limit N`.
+4. Усилить packaging versioning и release docs.
+5. Добавить Windows/Linux simulator-safe CI matrix.
+6. Реальное железо подключать только после bench inventory и bench validation.

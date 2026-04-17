@@ -90,8 +90,8 @@ Verification finished successfully.
 - `src/flower_vending/simulators/harness.py` — симуляторный запуск core с background runtime tasks.
 - `src/flower_vending/devices/dbv300sd` — архитектурная заготовка DBV-300-SD adapter/protocol/transport.
 - `config` — YAML-конфигурация устройств, портов и runtime параметров.
-- `docs/phase-01...phase-10` — фазовая архитектурная документация.
-- `docs/operations-runbook.md` — практический runbook по запуску и диагностике.
+- `docs/architecture/phase-history/phase-01...phase-10` — фазовая архитектурная документация.
+- `docs/operations/runbook.md` — практический runbook по запуску и диагностике.
 - `scripts/verify_project.py` — основная команда проверки.
 - `scripts/generate_project_documentation_docx.py` — генератор этого Word-документа.
 
@@ -365,9 +365,9 @@ python scripts\verify_project.py
 - Открыть этот Word-документ и убедиться, что русская кодировка отображается нормально.
 - Запустить `python scripts\verify_project.py`.
 - Прочитать `README.md`.
-- Прочитать `docs/operations-runbook.md`.
-- Для архитектуры пройти `docs/phase-01...phase-10`.
-- Для железа отдельно изучить `docs/phase-10-real-hardware-integration.md`.
+- Прочитать `docs/operations/runbook.md`.
+- Для архитектуры пройти `docs/architecture/phase-history/phase-01...phase-10`.
+- Для железа отдельно изучить `docs/architecture/phase-history/phase-10-real-hardware-integration.md`.
 - Новые аппаратные решения фиксировать ADR-документами в `docs/adr`.
 - Не писать низкоуровневые команды DBV-300-SD по догадкам.
 - Любое физическое действие должно иметь idempotency, recovery story и тесты отказов.

@@ -195,7 +195,7 @@ Runtime state now persists:
 
 ## 9. Platform Split
 
-See [Platform Abstractions](platform-abstractions.md).
+See [Platform Abstractions](../architecture/platform-abstractions.md).
 
 In short:
 

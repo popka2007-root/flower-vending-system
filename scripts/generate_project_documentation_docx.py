@@ -1,6 +1,6 @@
 """Generate the Russian handoff Word document.
 
-The source text lives in docs/project-documentation-ru.md as UTF-8 Markdown.
+The source text lives in docs/ru/project-documentation.md as UTF-8 Markdown.
 The generated .docx is plain Office Open XML and needs no third-party package.
 """
 
@@ -14,7 +14,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_PATH = PROJECT_ROOT / "docs" / "project-documentation-ru.md"
+SOURCE_PATH = PROJECT_ROOT / "docs" / "ru" / "project-documentation.md"
 OUTPUT_PATH = PROJECT_ROOT / "docs" / "flower-vending-system-project-documentation.docx"
 
 

@@ -154,8 +154,8 @@ python -m flower_vending simulator-runtime --config config\examples\machine.simu
 Рекомендуемый порядок входа:
 
 1. `README.md`
-2. `docs/operations-runbook.md`
-3. `docs/project-documentation-ru.md`
+2. `docs/operations/runbook.md`
+3. `docs/ru/project-documentation.md`
 4. `src/flower_vending/runtime/cli.py`
 5. `src/flower_vending/runtime/bootstrap.py`
 6. `tests/integration/test_runtime_modes.py`

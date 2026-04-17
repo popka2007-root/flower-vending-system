@@ -17,9 +17,12 @@ def run_packaged_simulator_app() -> int:
 
     bundled_docs = resource_root / "docs"
     if bundled_docs.exists():
-        for source in bundled_docs.glob("*.md"):
-            target = docs_target / source.name
+        for source in bundled_docs.rglob("*"):
+            if not source.is_file():
+                continue
+            target = docs_target / source.relative_to(bundled_docs)
             if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
 
     os.environ.setdefault("FLOWER_VENDING_RESOURCE_ROOT", str(resource_root))
