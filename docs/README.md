@@ -12,8 +12,8 @@
   эксплуатационные процедуры simulator-safe runtime.
 - [Architecture](architecture/) - platform abstractions и исторические phase
   docs по архитектуре.
-- [Hardware](hardware/) - bench plan, target assessment и hardware-dependent
-  ограничения.
+- [Hardware](hardware/) - bench checklist, DBV bench plan, target assessment и
+  hardware-dependent ограничения.
 - [ADR](adr/) - отдельный слой архитектурных решений.
 - [RU](ru/) - русскоязычные guides и handoff documentation.
 

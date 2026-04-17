@@ -117,6 +117,10 @@ Last-resort fallback:
 
 ## Bench Plan
 
+Use the full [Hardware Bench Validation Checklist](bench-validation-checklist.md)
+as the evidence gate before replacing simulator-safe assumptions with real
+adapters.
+
 Before installing over the current disk:
 
 1. Back up `C:\drivers`, `C:\Program Files\Custom Engineering`, Bitvise config,

@@ -25,13 +25,9 @@ Flower Vending System - план будущих запросов
 
 Что делать дальше простыми словами
 ----------------------------------
-1. Сначала убрать тонкие .bat/.sh wrappers, которые просто повторяют
-   python -m flower_vending.
-2. После этого проверить sitecustomize.py и root flower_vending shim: оставить
-   только если они реально нужны для запуска.
-3. Затем добавить operator diagnostics: status --json и events --limit N.
-4. Потом улучшать packaging/release и CI matrix.
-5. Реальное железо трогать только после bench inventory и bench validation.
+1. Улучшать packaging/release и CI matrix.
+2. Улучшить simulator UI fault/service states.
+3. Реальное железо трогать только после bench inventory и bench validation.
 
 Запрос 1: Смержить cleanup PR
 -----------------------------
@@ -80,6 +76,8 @@ Flower Vending System - план будущих запросов
 
 Запрос 3: Cleanup scripts и launcher
 ------------------------------------
+Статус: выполнено.
+
 Цель:
 - Уменьшить дублирование .bat/.sh wrappers вокруг python -m flower_vending.
 
@@ -89,33 +87,18 @@ Flower Vending System - план будущих запросов
 - scripts/check_repository_hygiene.py
 - scripts/collect-linux-hardware-inventory.sh
 - scripts/collect-windows-hardware-inventory.ps1
-
-Уже перенесено в CLI:
-- scripts/reset-demo-and-run-ui.bat теперь вызывает
-  python -m flower_vending simulator-ui --reset-state.
-
-Удалять после миграции README/docs:
-- scripts/validate-config.bat
-- scripts/validate-config.sh
-- scripts/run-diagnostics.bat
-- scripts/run-diagnostics.sh
-- scripts/run-service-mode.bat
-- scripts/run-service-mode.sh
-- scripts/run-simulator-runtime.bat
-- scripts/run-simulator-runtime.sh
-- scripts/run-simulator-ui.bat
-- scripts/run-simulator-ui.sh
-
-Решить отдельно:
 - scripts/build-windows-release.bat
 - scripts/build-linux-release.sh
 - scripts/generate_project_documentation_docx.py
 
-Готовый промт:
-- "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
-  документацию на прямые команды python -m flower_vending, оставь только
-  packaging scripts и hardware inventory scripts, затем удали тонкие wrappers,
-  которые не дают platform-specific пользы. Запусти verify_project.py и ruff."
+Удалено после миграции README/docs на прямой CLI:
+- thin runtime wrappers для validate-config, diagnostics, service mode,
+  simulator-runtime, simulator-ui и reset demo state.
+
+Готовый промт для повторной проверки:
+- "Проверь, что README/docs больше не ссылаются на удалённые тонкие
+  shell/batch wrappers. Разрешены только packaging scripts и
+  hardware inventory scripts. Запусти verify_project.py, ruff и hygiene check."
 
 Запрос 4: Developer experience и CI
 -----------------------------------
@@ -141,38 +124,42 @@ Flower Vending System - план будущих запросов
 
 Запрос 5: Проверка compatibility shims
 --------------------------------------
+Статус: выполнено.
+
 Цель:
 - Понять, нужны ли sitecustomize.py и root-level flower_vending shims.
 
-Действия:
-- Проверить python -m flower_vending из repo root в чистом окружении.
-- Проверить editable install.
-- Проверить wheel-like/install path поведение.
-- Если root package shim достаточно, убрать sitecustomize.py.
-- Удалять flower_vending/__main__.py только если python -m flower_vending
-  продолжает работать из repo root и installed package paths.
+Результат:
+- sitecustomize.py удалён: root package shim достаточно для repo-root запуска.
+- flower_vending/__init__.py и flower_vending/__main__.py оставлены: они нужны,
+  чтобы python -m flower_vending работал из repo root без editable install.
+- Editable install и wheel-like import paths проверены отдельно; entrypoints
+  продолжают работать.
 
-Готовый промт:
+Готовый промт для повторной проверки:
 - "Проверь python -m flower_vending из repo root, editable install и wheel-like
-  import paths. Реши, нужны ли sitecustomize.py и root flower_vending shim.
-  Удаляй только если все entrypoints продолжают работать."
+  import paths после удаления sitecustomize.py. Root flower_vending shim не
+  удаляй, если repo-root запуск без install от него зависит."
 
 Запрос 6: Observability и operator diagnostics
 ----------------------------------------------
+Статус: выполнено.
+
 Цель:
 - Упростить поддержку и диагностику без чтения raw logs.
 
-Действия:
-- Добавить python -m flower_vending status --json.
-- Добавить python -m flower_vending events --limit N.
-- Добавить service-mode health summary по devices, blockers, unresolved
-  transactions и recent events.
-- Задокументировать log locations и diagnostics bundle workflow.
+Сделано:
+- python -m flower_vending status --json читает SQLite status projection,
+  unresolved transactions/intents, faults, money inventory и latest applied config.
+- python -m flower_vending events --limit N читает последние события из
+  transaction journal и operational event tables.
+- Добавлены integration tests.
+- Обновлены operations docs.
 
-Готовый промт:
-- "Добавь команды python -m flower_vending status --json и events --limit N на
-  базе существующего SQLite state и event repositories. Добавь тесты и обнови
-  operations docs."
+Готовый промт для повторной проверки:
+- "Проверь operator observability CLI: status --json и events --limit N должны
+  читать SQLite state без запуска simulator runtime. Добавь недостающие поля
+  только если они уже есть в persistence layer."
 
 Запрос 7: UI/UX simulator polish
 --------------------------------
@@ -210,6 +197,10 @@ Flower Vending System - план будущих запросов
 
 Запрос 9: Hardware-readiness groundwork
 ---------------------------------------
+Статус: частично выполнено: bench validation checklist добавлен в
+docs/hardware/bench-validation-checklist.md. Фактические inventory/bench runs
+остаются задачами для физического стенда.
+
 Цель:
 - Подготовиться к реальному железу, не заявляя production readiness.
 
@@ -228,11 +219,11 @@ Flower Vending System - план будущих запросов
 - Реализовывать реальные payout/motor/pickup sensor adapters.
 - Заявлять production-ready watchdog, service или autostart behavior.
 
-Готовый промт:
-- "Используя docs/hardware и config/targets/machine.debian13-target.yaml,
-  подготовь bench validation checklist для DBV-300-SD, payout, motors, sensors,
-  watchdog, kiosk lockdown, service/autostart и recovery. Не реализуй real
-  hardware behavior без bench evidence."
+Готовый промт для продолжения на физическом стенде:
+- "Пройди docs/hardware/bench-validation-checklist.md на реальном cabinet:
+  собери Windows/Linux inventory, фото, stable device paths, DBV raw traces и
+  recovery evidence. Не реализуй adapters, пока соответствующий раздел
+  checklist не закрыт доказательствами."
 
 Запрос 10: Product readiness levels
 -----------------------------------
@@ -259,16 +250,12 @@ Flower Vending System - план будущих запросов
 
 Приоритетный порядок
 --------------------
-1. Перевести README/docs с convenience wrappers на python -m flower_vending.
-2. Удалить deprecated thin wrapper scripts.
-3. Проверить sitecustomize.py и root flower_vending shim.
-4. Добавить status/events observability commands.
-5. Усилить packaging versioning и release docs.
-6. Добавить Windows/Linux simulator-safe CI matrix.
-7. Начать hardware inventory и bench validation planning.
-8. Улучшить simulator UI fault/service states.
-9. Описать product readiness acceptance criteria.
-10. Провести повторный docs link/hygiene audit после следующего крупного PR.
+1. Усилить packaging versioning и release docs.
+2. Добавить Windows/Linux simulator-safe CI matrix.
+3. Провести hardware inventory и bench validation на физическом стенде.
+4. Улучшить simulator UI fault/service states.
+5. Описать product readiness acceptance criteria.
+6. Провести повторный docs link/hygiene audit после следующего крупного PR.
 
 Готовые промты для другого чата
 -------------------------------
@@ -277,27 +264,26 @@ Flower Vending System - план будущих запросов
   links живые, mapping старых путей полный, ADR остались отдельным слоем, а
   русскоязычные guides лежат в docs/ru/. Исправь только найденные рассинхроны."
 
-Промт B - cleanup scripts:
-- "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
-  документацию на прямые команды python -m flower_vending, оставь только
-  packaging scripts и hardware inventory scripts, затем удали тонкие wrappers,
-  которые не дают platform-specific пользы. Запусти verify_project.py и ruff."
+Промт B - проверка после cleanup scripts:
+- "Проверь, что README/docs больше не ссылаются на удалённые тонкие
+  shell/batch wrappers. Разрешены только packaging scripts и
+  hardware inventory scripts. Запусти verify_project.py, ruff и hygiene check."
 
-Промт C - compatibility shims:
+Промт C - проверка после compatibility shim cleanup:
 - "Проверь python -m flower_vending из repo root, editable install и wheel-like
-  import paths. Реши, нужны ли sitecustomize.py и root flower_vending shim.
-  Удаляй только если все entrypoints продолжают работать."
+  import paths после удаления sitecustomize.py. Root flower_vending shim не
+  удаляй, если repo-root запуск без install от него зависит."
 
-Промт D - observability:
-- "Добавь команды python -m flower_vending status --json и events --limit N на
-  базе существующего SQLite state и event repositories. Добавь тесты и обнови
-  operations docs."
+Промт D - проверка observability:
+- "Проверь operator observability CLI: status --json и events --limit N должны
+  читать SQLite state без запуска simulator runtime. Добавь недостающие поля
+  только если они уже есть в persistence layer."
 
-Промт E - hardware bench planning:
-- "Используя docs/hardware и config/targets/machine.debian13-target.yaml,
-  подготовь bench validation checklist для DBV-300-SD, payout, motors, sensors,
-  watchdog, kiosk lockdown, service/autostart и recovery. Не реализуй real
-  hardware behavior без bench evidence."
+Промт E - hardware bench execution:
+- "Пройди docs/hardware/bench-validation-checklist.md на реальном cabinet:
+  собери Windows/Linux inventory, фото, stable device paths, DBV raw traces и
+  recovery evidence. Не реализуй adapters, пока соответствующий раздел
+  checklist не закрыт доказательствами."
 
 Общие правила для будущей работы
 --------------------------------

@@ -98,6 +98,33 @@ python -m flower_vending simulator-runtime --config config\examples\machine.simu
 python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
 ```
 
+### Persisted Status
+
+Read the last persisted SQLite status projection without starting the runtime:
+
+```powershell
+python -m flower_vending status --config config\examples\machine.simulator.yaml --json
+```
+
+This is useful for operator tooling after restart, crash recovery, or remote
+support sessions where you need the last known machine state, unresolved
+transactions, unresolved journal intents, unacknowledged faults, and money
+inventory snapshot.
+
+### Persisted Events
+
+Read recent SQLite-backed journal/service/temperature events:
+
+```powershell
+python -m flower_vending events --config config\examples\machine.simulator.yaml --limit 20
+```
+
+Use `--json` when feeding the output into support tooling:
+
+```powershell
+python -m flower_vending events --config config\examples\machine.simulator.yaml --limit 20 --json
+```
+
 ### Service Mode
 
 ```powershell
@@ -116,23 +143,24 @@ python -m flower_vending service --config config\examples\machine.simulator.yaml
 python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
 ```
 
-## 5. Convenience Scripts
+## 5. Direct CLI Commands
 
-Windows:
+Use the unified Python entrypoint for runtime operations instead of thin shell
+wrappers:
 
-- `scripts\validate-config.bat`
-- `scripts\run-simulator-runtime.bat`
-- `scripts\run-diagnostics.bat`
-- `scripts\run-service-mode.bat`
-- `scripts\run-simulator-ui.bat`
+```powershell
+python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
+python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
+python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
+python -m flower_vending status --config config\examples\machine.simulator.yaml --json
+python -m flower_vending events --config config\examples\machine.simulator.yaml --limit 20
+python -m flower_vending service --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
+```
 
-Linux:
-
-- `./scripts/validate-config.sh`
-- `./scripts/run-simulator-runtime.sh`
-- `./scripts/run-diagnostics.sh`
-- `./scripts/run-service-mode.sh`
-- `./scripts/run-simulator-ui.sh`
+The remaining shell/batch scripts are reserved for packaging and hardware
+inventory tasks where the host platform matters.
 
 ## 6. UI Scenarios You Can Walk Through
 
@@ -192,6 +220,13 @@ Runtime state now persists:
 - transaction snapshots for unresolved flows;
 - service and temperature events;
 - applied config snapshots.
+
+Operator observability commands:
+
+- `python -m flower_vending status --json` reads the last persisted machine
+  status and recovery summary from SQLite;
+- `python -m flower_vending events --limit N` reads recent persisted events from
+  the transaction journal and operational event tables.
 
 ## 9. Platform Split
 

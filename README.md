@@ -97,32 +97,38 @@ scripts\build-windows-release.bat
 ```
 
 GitHub release automation находится в `.github/workflows/build-release.yml`.
-Push tag вида `v0.1.4` собирает Windows/Linux artifacts и публикует их в
+Push tag вида `v0.1.5` собирает Windows/Linux artifacts и публикует их в
 GitHub Releases.
 
-Windows convenience scripts:
+## Unified CLI
+
+Use direct `python -m flower_vending ...` commands for simulator workflows.
+They work the same way on Windows and Linux, with only path separators changed
+for the host shell.
 
 ```powershell
-scripts\validate-config.bat
-scripts\run-simulator-runtime.bat
-scripts\run-diagnostics.bat
-scripts\run-service-mode.bat
-scripts\run-simulator-ui.bat
-scripts\reset-demo-and-run-ui.bat
+python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
+python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
+python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
+python -m flower_vending status --config config\examples\machine.simulator.yaml --json
+python -m flower_vending events --config config\examples\machine.simulator.yaml --limit 20
+python -m flower_vending service --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
 ```
 
-Linux convenience scripts:
+Linux equivalent:
 
 ```bash
-./scripts/validate-config.sh
-./scripts/run-simulator-runtime.sh
-./scripts/run-diagnostics.sh
-./scripts/run-service-mode.sh
-./scripts/run-simulator-ui.sh
+python -m flower_vending validate-config --config config/examples/machine.simulator.yaml --prepare
+python -m flower_vending simulator-runtime --config config/examples/machine.simulator.yaml
+python -m flower_vending diagnostics --config config/examples/machine.simulator.yaml
+python -m flower_vending status --config config/examples/machine.simulator.yaml --json
+python -m flower_vending events --config config/examples/machine.simulator.yaml --limit 20
+python -m flower_vending service --config config/examples/machine.simulator.yaml
+python -m flower_vending simulator-ui --config config/examples/machine.simulator.yaml
+python -m flower_vending simulator-ui --config config/examples/machine.simulator.yaml --reset-state
 ```
-
-Эти convenience scripts постепенно стоит заменять прямыми командами
-`python -m flower_vending ...`, если они не дают platform-specific пользы.
 
 ## Verification
 
@@ -178,6 +184,7 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 - [User Guide (RU)](docs/ru/user-guide.md)
 - [Developer Guide (RU)](docs/ru/developer-guide.md)
 - [Technical Guide (RU)](docs/ru/technical-guide.md)
+- [Hardware Bench Validation Checklist](docs/hardware/bench-validation-checklist.md)
 - [Debian 13 Target Hardware Assessment](docs/hardware/debian13-target-assessment.md)
 - [План будущих запросов](docs/overview/future-requests-plan.txt)
 
@@ -201,10 +208,7 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 
 Короткий порядок развития:
 
-1. Убрать thin `.bat/.sh` wrappers после перевода README/docs на
-   `python -m flower_vending`.
-2. Проверить `sitecustomize.py` и root `flower_vending/` shim.
-3. Добавить operator diagnostics: `status --json` и `events --limit N`.
-4. Усилить packaging versioning и release docs.
-5. Добавить Windows/Linux simulator-safe CI matrix.
-6. Реальное железо подключать только после bench inventory и bench validation.
+1. Усилить packaging versioning и release docs.
+2. Добавить Windows/Linux simulator-safe CI matrix.
+3. Улучшить simulator UI fault/service states.
+4. Реальное железо подключать только после bench inventory и bench validation.

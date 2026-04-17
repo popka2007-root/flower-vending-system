@@ -21,6 +21,8 @@ CLI_HELP_COMMANDS = (
     (),
     ("validate-config",),
     ("diagnostics",),
+    ("status",),
+    ("events",),
     ("service",),
     ("simulator-runtime",),
     ("simulator-ui",),
