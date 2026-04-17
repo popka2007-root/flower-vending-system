@@ -16,6 +16,8 @@ Flower Vending System - план будущих запросов
 - Repository hygiene checks подключены в scripts/verify_project.py.
 - Verifier проверяет матрицу конфигов и smoke --help для CLI-команд.
 - simulator-ui поддерживает --reset-state для очистки demo SQLite state.
+- Docs разложены по docs/overview, docs/operations, docs/architecture,
+  docs/hardware, docs/adr и docs/ru; mapping старых путей описан в docs/README.md.
 - Hardware target documentation отделена от generic examples и лежит в
   config/targets/.
 - Проект пока не production-hardware-ready: real hardware нужно подтверждать на
@@ -23,15 +25,13 @@ Flower Vending System - план будущих запросов
 
 Что делать дальше простыми словами
 ----------------------------------
-1. Сначала привести документацию в порядок: сделать docs/README.md, разложить
-   phase docs, RU guides, hardware docs и ADR по понятным папкам.
-2. Потом убрать тонкие .bat/.sh wrappers, которые просто повторяют
+1. Сначала убрать тонкие .bat/.sh wrappers, которые просто повторяют
    python -m flower_vending.
-3. После этого проверить sitecustomize.py и root flower_vending shim: оставить
+2. После этого проверить sitecustomize.py и root flower_vending shim: оставить
    только если они реально нужны для запуска.
-4. Затем добавить operator diagnostics: status --json и events --limit N.
-5. Потом улучшать packaging/release и CI matrix.
-6. Реальное железо трогать только после bench inventory и bench validation.
+3. Затем добавить operator diagnostics: status --json и events --limit N.
+4. Потом улучшать packaging/release и CI matrix.
+5. Реальное железо трогать только после bench inventory и bench validation.
 
 Запрос 1: Смержить cleanup PR
 -----------------------------
@@ -49,6 +49,9 @@ Flower Vending System - план будущих запросов
 
 Запрос 2: Консолидация документации
 -----------------------------------
+Статус:
+- Выполнено. Актуальная структура описана в docs/README.md.
+
 Цель:
 - Реорганизовать docs без потери смысла.
 
@@ -70,12 +73,10 @@ Flower Vending System - план будущих запросов
 - DOCX считать generated-only; не хранить в git.
 - Не удалять содержимое без mapping "старый файл -> новый раздел".
 
-Готовый промт:
-- "Реализуй план консолидации документации из
-  docs/future-requests-plan.txt. Создай docs/README.md, перенеси phase docs в
-  docs/architecture/phase-history/, перенеси русские guides в docs/ru/, ADR
-  оставь отдельным слоем, обнови все ссылки в README/docs. Не удаляй содержимое
-  без mapping 'старый файл -> новый раздел'."
+Готовый промт для проверки/доработки:
+- "Проверь новую структуру docs по docs/README.md: убедись, что все markdown
+  links живые, mapping старых путей полный, ADR остались отдельным слоем, а
+  русскоязычные guides лежат в docs/ru/. Исправь только найденные рассинхроны."
 
 Запрос 3: Cleanup scripts и launcher
 ------------------------------------
@@ -258,25 +259,23 @@ Flower Vending System - план будущих запросов
 
 Приоритетный порядок
 --------------------
-1. Создать docs/README.md и разложить docs по папкам.
-2. Перевести README/docs с convenience wrappers на python -m flower_vending.
-3. Удалить deprecated thin wrapper scripts.
-4. Проверить sitecustomize.py и root flower_vending shim.
-5. Добавить status/events observability commands.
-6. Усилить packaging versioning и release docs.
-7. Добавить Windows/Linux simulator-safe CI matrix.
-8. Начать hardware inventory и bench validation planning.
-9. Улучшить simulator UI fault/service states.
-10. Описать product readiness acceptance criteria.
+1. Перевести README/docs с convenience wrappers на python -m flower_vending.
+2. Удалить deprecated thin wrapper scripts.
+3. Проверить sitecustomize.py и root flower_vending shim.
+4. Добавить status/events observability commands.
+5. Усилить packaging versioning и release docs.
+6. Добавить Windows/Linux simulator-safe CI matrix.
+7. Начать hardware inventory и bench validation planning.
+8. Улучшить simulator UI fault/service states.
+9. Описать product readiness acceptance criteria.
+10. Провести повторный docs link/hygiene audit после следующего крупного PR.
 
 Готовые промты для другого чата
 -------------------------------
-Промт A - консолидация документации:
-- "Реализуй план консолидации документации из
-  docs/future-requests-plan.txt. Создай docs/README.md, перенеси phase docs в
-  docs/architecture/phase-history/, перенеси русские guides в docs/ru/, ADR
-  оставь отдельным слоем, обнови все ссылки в README/docs. Не удаляй содержимое
-  без mapping 'старый файл -> новый раздел'."
+Промт A - проверка docs consolidation:
+- "Проверь новую структуру docs по docs/README.md: убедись, что все markdown
+  links живые, mapping старых путей полный, ADR остались отдельным слоем, а
+  русскоязычные guides лежат в docs/ru/. Исправь только найденные рассинхроны."
 
 Промт B - cleanup scripts:
 - "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
