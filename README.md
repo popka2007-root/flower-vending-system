@@ -203,10 +203,8 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 
 Короткий порядок развития:
 
-1. Убрать thin `.bat/.sh` wrappers после перевода README/docs на
-   `python -m flower_vending`.
-2. Проверить `sitecustomize.py` и root `flower_vending/` shim.
-3. Добавить operator diagnostics: `status --json` и `events --limit N`.
-4. Усилить packaging versioning и release docs.
-5. Добавить Windows/Linux simulator-safe CI matrix.
-6. Реальное железо подключать только после bench inventory и bench validation.
+1. Добавить operator diagnostics: `status --json` и `events --limit N`.
+2. Усилить packaging versioning и release docs.
+3. Добавить Windows/Linux simulator-safe CI matrix.
+4. Улучшить simulator UI fault/service states.
+5. Реальное железо подключать только после bench inventory и bench validation.

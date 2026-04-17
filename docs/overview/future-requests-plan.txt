@@ -25,13 +25,10 @@ Flower Vending System - план будущих запросов
 
 Что делать дальше простыми словами
 ----------------------------------
-1. Сначала убрать тонкие .bat/.sh wrappers, которые просто повторяют
-   python -m flower_vending.
-2. После этого проверить sitecustomize.py и root flower_vending shim: оставить
-   только если они реально нужны для запуска.
-3. Затем добавить operator diagnostics: status --json и events --limit N.
-4. Потом улучшать packaging/release и CI matrix.
-5. Реальное железо трогать только после bench inventory и bench validation.
+1. Добавить operator diagnostics: status --json и events --limit N.
+2. Потом улучшать packaging/release и CI matrix.
+3. Улучшить simulator UI fault/service states.
+4. Реальное железо трогать только после bench inventory и bench validation.
 
 Запрос 1: Смержить cleanup PR
 -----------------------------
@@ -128,21 +125,22 @@ Flower Vending System - план будущих запросов
 
 Запрос 5: Проверка compatibility shims
 --------------------------------------
+Статус: выполнено.
+
 Цель:
 - Понять, нужны ли sitecustomize.py и root-level flower_vending shims.
 
-Действия:
-- Проверить python -m flower_vending из repo root в чистом окружении.
-- Проверить editable install.
-- Проверить wheel-like/install path поведение.
-- Если root package shim достаточно, убрать sitecustomize.py.
-- Удалять flower_vending/__main__.py только если python -m flower_vending
-  продолжает работать из repo root и installed package paths.
+Результат:
+- sitecustomize.py удалён: root package shim достаточно для repo-root запуска.
+- flower_vending/__init__.py и flower_vending/__main__.py оставлены: они нужны,
+  чтобы python -m flower_vending работал из repo root без editable install.
+- Editable install и wheel-like import paths проверены отдельно; entrypoints
+  продолжают работать.
 
-Готовый промт:
+Готовый промт для повторной проверки:
 - "Проверь python -m flower_vending из repo root, editable install и wheel-like
-  import paths. Реши, нужны ли sitecustomize.py и root flower_vending shim.
-  Удаляй только если все entrypoints продолжают работать."
+  import paths после удаления sitecustomize.py. Root flower_vending shim не
+  удаляй, если repo-root запуск без install от него зависит."
 
 Запрос 6: Observability и operator diagnostics
 ----------------------------------------------
@@ -246,14 +244,13 @@ Flower Vending System - план будущих запросов
 
 Приоритетный порядок
 --------------------
-1. Проверить sitecustomize.py и root flower_vending shim.
-2. Добавить status/events observability commands.
-3. Усилить packaging versioning и release docs.
-4. Добавить Windows/Linux simulator-safe CI matrix.
-5. Начать hardware inventory и bench validation planning.
-6. Улучшить simulator UI fault/service states.
-7. Описать product readiness acceptance criteria.
-8. Провести повторный docs link/hygiene audit после следующего крупного PR.
+1. Добавить status/events observability commands.
+2. Усилить packaging versioning и release docs.
+3. Добавить Windows/Linux simulator-safe CI matrix.
+4. Начать hardware inventory и bench validation planning.
+5. Улучшить simulator UI fault/service states.
+6. Описать product readiness acceptance criteria.
+7. Провести повторный docs link/hygiene audit после следующего крупного PR.
 
 Готовые промты для другого чата
 -------------------------------
@@ -267,10 +264,10 @@ Flower Vending System - план будущих запросов
   shell/batch wrappers. Разрешены только packaging scripts и
   hardware inventory scripts. Запусти verify_project.py, ruff и hygiene check."
 
-Промт C - compatibility shims:
+Промт C - проверка после compatibility shim cleanup:
 - "Проверь python -m flower_vending из repo root, editable install и wheel-like
-  import paths. Реши, нужны ли sitecustomize.py и root flower_vending shim.
-  Удаляй только если все entrypoints продолжают работать."
+  import paths после удаления sitecustomize.py. Root flower_vending shim не
+  удаляй, если repo-root запуск без install от него зависит."
 
 Промт D - observability:
 - "Добавь команды python -m flower_vending status --json и events --limit N на
