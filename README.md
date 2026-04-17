@@ -110,6 +110,8 @@ for the host shell.
 python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
 python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
 python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
+python -m flower_vending status --config config\examples\machine.simulator.yaml --json
+python -m flower_vending events --config config\examples\machine.simulator.yaml --limit 20
 python -m flower_vending service --config config\examples\machine.simulator.yaml
 python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
 python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
@@ -121,6 +123,8 @@ Linux equivalent:
 python -m flower_vending validate-config --config config/examples/machine.simulator.yaml --prepare
 python -m flower_vending simulator-runtime --config config/examples/machine.simulator.yaml
 python -m flower_vending diagnostics --config config/examples/machine.simulator.yaml
+python -m flower_vending status --config config/examples/machine.simulator.yaml --json
+python -m flower_vending events --config config/examples/machine.simulator.yaml --limit 20
 python -m flower_vending service --config config/examples/machine.simulator.yaml
 python -m flower_vending simulator-ui --config config/examples/machine.simulator.yaml
 python -m flower_vending simulator-ui --config config/examples/machine.simulator.yaml --reset-state
@@ -203,8 +207,7 @@ assets из `src/flower_vending/ui/assets/products/`; release packaging вклю
 
 Короткий порядок развития:
 
-1. Добавить operator diagnostics: `status --json` и `events --limit N`.
-2. Усилить packaging versioning и release docs.
-3. Добавить Windows/Linux simulator-safe CI matrix.
-4. Улучшить simulator UI fault/service states.
-5. Реальное железо подключать только после bench inventory и bench validation.
+1. Усилить packaging versioning и release docs.
+2. Добавить Windows/Linux simulator-safe CI matrix.
+3. Улучшить simulator UI fault/service states.
+4. Реальное железо подключать только после bench inventory и bench validation.

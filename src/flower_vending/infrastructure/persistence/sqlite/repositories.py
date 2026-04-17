@@ -216,6 +216,26 @@ class MachineStatusRepository:
             warnings=self._database.loads(row["warnings_json"], default=[]) or [],
         )
 
+    def snapshot(self, *, machine_id: str = "primary") -> dict[str, Any] | None:
+        row = self._database.query_one(
+            "SELECT * FROM machine_status_projection WHERE machine_id = ?",
+            (machine_id,),
+        )
+        if row is None:
+            return None
+        return {
+            "machine_id": row["machine_id"],
+            "machine_state": row["machine_state"],
+            "service_mode": bool(row["service_mode"]),
+            "exact_change_only": bool(row["exact_change_only"]),
+            "sale_blockers": self._database.loads(row["sale_blockers_json"], default=[]) or [],
+            "warnings": self._database.loads(row["warnings_json"], default=[]) or [],
+            "active_transaction_id": row["active_transaction_id"],
+            "allow_cash_sales": bool(row["allow_cash_sales"]),
+            "allow_vending": bool(row["allow_vending"]),
+            "updated_at": row["updated_at"],
+        }
+
 
 class MoneyInventoryRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
@@ -275,6 +295,42 @@ class MoneyInventoryRepository:
             accounting_counts=self._database.loads(row["accounting_counts_json"], default={}) or {},
             reserved_counts=self._database.loads(row["reserved_counts_json"], default={}) or {},
         )
+
+    def snapshot(self, *, inventory_id: str = "main") -> dict[str, Any] | None:
+        row = self._database.query_one(
+            "SELECT * FROM money_inventory WHERE inventory_id = ?",
+            (inventory_id,),
+        )
+        if row is None:
+            return None
+        accounting_counts = {
+            str(denomination): int(count)
+            for denomination, count in (
+                self._database.loads(row["accounting_counts_json"], default={}) or {}
+            ).items()
+        }
+        reserved_counts = {
+            str(denomination): int(count)
+            for denomination, count in (
+                self._database.loads(row["reserved_counts_json"], default={}) or {}
+            ).items()
+        }
+        available_counts = {
+            denomination: max(0, count - reserved_counts.get(denomination, 0))
+            for denomination, count in accounting_counts.items()
+        }
+        return {
+            "inventory_id": row["inventory_id"],
+            "currency_code": row["currency_code"],
+            "accounting_counts": accounting_counts,
+            "reserved_counts": reserved_counts,
+            "available_counts": available_counts,
+            "physical_state_confidence": row["physical_state_confidence"],
+            "exact_change_only": bool(row["exact_change_only"]),
+            "last_reconciled_at": row["last_reconciled_at"],
+            "drift_detected": bool(row["drift_detected"]),
+            "updated_at": row["updated_at"],
+        }
 
 
 class TransactionRepository:
@@ -388,6 +444,34 @@ class TransactionRepository:
             )
             for row in rows
         )
+
+    def list_unresolved_summaries(self) -> tuple[dict[str, Any], ...]:
+        rows = self._database.query_all(
+            """
+            SELECT
+                transaction_id,
+                correlation_id,
+                product_id,
+                slot_id,
+                price_minor_units,
+                currency_code,
+                status,
+                accepted_minor_units,
+                change_due_minor_units,
+                payment_status,
+                payout_status,
+                dispense_status,
+                delivery_status,
+                recovery_status,
+                created_at,
+                updated_at
+            FROM transactions
+            WHERE status NOT IN ('completed', 'cancelled')
+               OR recovery_status <> 'none'
+            ORDER BY updated_at ASC
+            """
+        )
+        return tuple(dict(row) for row in rows)
 
 
 class DeviceFaultLogRepository:
@@ -513,6 +597,63 @@ class OperationalEventRepository:
                 _utc_now_iso(),
             ),
         )
+
+    def list_recent(self, *, limit: int = 50) -> tuple[dict[str, Any], ...]:
+        service_rows = self._database.query_all(
+            """
+            SELECT
+                service_event_id AS event_id,
+                'service_events' AS source,
+                event_type,
+                operator_id,
+                NULL AS sensor_name,
+                NULL AS celsius,
+                correlation_id,
+                NULL AS transaction_id,
+                payload_json AS payload_json,
+                occurred_at
+            FROM service_events
+            ORDER BY occurred_at DESC, service_event_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        temperature_rows = self._database.query_all(
+            """
+            SELECT
+                temperature_event_id AS event_id,
+                'temperature_events' AS source,
+                event_type,
+                NULL AS operator_id,
+                sensor_name,
+                celsius,
+                correlation_id,
+                NULL AS transaction_id,
+                details_json AS payload_json,
+                occurred_at
+            FROM temperature_events
+            ORDER BY occurred_at DESC, temperature_event_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = [*service_rows, *temperature_rows]
+        rows.sort(key=lambda row: (row["occurred_at"], row["source"], row["event_id"]), reverse=True)
+        return tuple(self._event_row_to_dict(row) for row in rows[:limit])
+
+    def _event_row_to_dict(self, row: Any) -> dict[str, Any]:
+        return {
+            "source": row["source"],
+            "event_id": row["event_id"],
+            "event_type": row["event_type"],
+            "correlation_id": row["correlation_id"],
+            "transaction_id": row["transaction_id"],
+            "operator_id": row["operator_id"],
+            "sensor_name": row["sensor_name"],
+            "celsius": row["celsius"],
+            "payload": self._database.loads(row["payload_json"], default={}) or {},
+            "occurred_at": row["occurred_at"],
+        }
 
 class DeviceSettingsRepository:
     def __init__(self, database: SQLiteDatabase) -> None:

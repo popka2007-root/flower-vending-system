@@ -237,6 +237,29 @@ class SQLiteTransactionJournal:
         )
         return tuple(self._row_to_entry(row) for row in rows)
 
+    def list_recent(self, *, limit: int = 50) -> tuple[dict[str, Any], ...]:
+        rows = self._database.query_all(
+            """
+            SELECT
+                journal_id,
+                transaction_id,
+                correlation_id,
+                entry_kind,
+                entry_name,
+                machine_state,
+                transaction_status,
+                payload_json,
+                idempotency_key,
+                created_at
+            FROM transaction_journal
+            WHERE entry_kind = 'event'
+            ORDER BY created_at DESC, journal_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return tuple(self._row_to_recent_event(row) for row in rows)
+
     def unresolved_transaction_ids(self) -> tuple[str, ...]:
         rows = self._database.query_all(
             """
@@ -300,6 +323,21 @@ class SQLiteTransactionJournal:
             idempotency_key=row["idempotency_key"],
             created_at=datetime.fromisoformat(row["created_at"]),
         )
+
+    def _row_to_recent_event(self, row: Any) -> dict[str, Any]:
+        return {
+            "source": "transaction_journal",
+            "event_id": row["journal_id"],
+            "entry_kind": row["entry_kind"],
+            "event_type": row["entry_name"],
+            "correlation_id": row["correlation_id"],
+            "transaction_id": row["transaction_id"],
+            "machine_state": row["machine_state"],
+            "transaction_status": row["transaction_status"],
+            "payload": self._database.loads(row["payload_json"], default={}) or {},
+            "idempotency_key": row["idempotency_key"],
+            "occurred_at": row["created_at"],
+        }
 
     def _row_to_application_record(self, row: Any) -> ApplicationJournalRecord:
         return ApplicationJournalRecord(

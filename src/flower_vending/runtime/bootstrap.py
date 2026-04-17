@@ -19,6 +19,7 @@ from flower_vending.infrastructure.logging.setup import StructuredLoggerAdapter,
 from flower_vending.infrastructure.persistence.journal import SQLiteTransactionJournal
 from flower_vending.infrastructure.persistence.sqlite import (
     AppliedConfigRepository,
+    DeviceFaultLogRepository,
     DeviceSettingsRepository,
     MachineStatusRepository,
     MoneyInventoryRepository,
@@ -89,6 +90,7 @@ class RuntimeRepositories:
     money_inventory: MoneyInventoryRepository
     transactions: TransactionRepository
     journal: SQLiteTransactionJournal
+    device_faults: DeviceFaultLogRepository
     device_settings: DeviceSettingsRepository
     applied_config: AppliedConfigRepository
     operational_events: OperationalEventRepository
@@ -473,6 +475,112 @@ def resolve_runtime_path(project_root: Path, raw_path: str) -> Path:
     return project_root / candidate
 
 
+def open_runtime_repositories(
+    config_path: str | Path,
+    *,
+    prepare_directories: bool = False,
+) -> tuple[AppConfig, BootstrapReport, RuntimeRepositories]:
+    config, _, report = validate_config_file(
+        config_path,
+        prepare_directories=prepare_directories,
+    )
+    if not report.valid:
+        errors = [message.message for message in report.messages if message.severity == "error"]
+        raise ValueError("; ".join(errors))
+    database = SQLiteDatabase(
+        resolve_runtime_path(report.state_root, config.persistence.sqlite_path),
+        busy_timeout_ms=config.persistence.busy_timeout_ms,
+        enable_wal=config.persistence.enable_wal,
+        synchronous=config.persistence.synchronous,
+    )
+    ensure_sqlite_schema(database)
+    repositories = RuntimeRepositories(
+        database=database,
+        products=ProductRepository(database),
+        slots=SlotRepository(database),
+        machine_status=MachineStatusRepository(database),
+        money_inventory=MoneyInventoryRepository(database),
+        transactions=TransactionRepository(database),
+        journal=SQLiteTransactionJournal(database),
+        device_faults=DeviceFaultLogRepository(database),
+        device_settings=DeviceSettingsRepository(database),
+        applied_config=AppliedConfigRepository(database),
+        operational_events=OperationalEventRepository(database),
+    )
+    return config, report, repositories
+
+
+def read_runtime_status(config_path: str | Path) -> dict[str, Any]:
+    config, report, repositories = open_runtime_repositories(
+        config_path,
+        prepare_directories=True,
+    )
+    try:
+        unresolved_intents = repositories.journal.unresolved_intents()
+        latest_applied_config = repositories.applied_config.latest()
+        if latest_applied_config is not None:
+            latest_applied_config.pop("yaml_text", None)
+        return {
+            "config_path": str(report.config_path),
+            "database_path": str(repositories.database.path),
+            "machine_id": config.machine.machine_id,
+            "platform": {
+                "target_os": report.platform_profile.target_os,
+                "extension_points": [
+                    {
+                        "name": item.name,
+                        "mode": item.mode,
+                        "status": item.status.value,
+                        "description": item.description,
+                    }
+                    for item in report.platform_profile.extension_points
+                ],
+            },
+            "machine": repositories.machine_status.snapshot(machine_id=config.machine.machine_id),
+            "money_inventory": repositories.money_inventory.snapshot(),
+            "unresolved_transactions": list(repositories.transactions.list_unresolved_summaries()),
+            "unresolved_intents": [
+                {
+                    "entry_name": intent.entry_name,
+                    "correlation_id": intent.correlation_id,
+                    "transaction_id": intent.transaction_id,
+                    "machine_state": intent.machine_state,
+                    "transaction_status": intent.transaction_status,
+                    "payload": intent.payload,
+                    "created_at": intent.created_at.isoformat(),
+                }
+                for intent in unresolved_intents
+            ],
+            "unacknowledged_faults": list(repositories.device_faults.list_unacknowledged()),
+            "latest_applied_config": latest_applied_config,
+            "hardware_warnings": list(report.hardware_warnings),
+        }
+    finally:
+        repositories.database.close()
+
+
+def read_runtime_events(config_path: str | Path, *, limit: int = 50) -> dict[str, Any]:
+    config, report, repositories = open_runtime_repositories(
+        config_path,
+        prepare_directories=True,
+    )
+    try:
+        events = [
+            *repositories.journal.list_recent(limit=limit),
+            *repositories.operational_events.list_recent(limit=limit),
+        ]
+        events.sort(key=lambda item: str(item["occurred_at"]), reverse=True)
+        return {
+            "config_path": str(report.config_path),
+            "database_path": str(repositories.database.path),
+            "machine_id": config.machine.machine_id,
+            "limit": limit,
+            "events": events[:limit],
+        }
+    finally:
+        repositories.database.close()
+
+
 def _transactions_to_persist(
     core: ApplicationCore,
     *,
@@ -517,6 +625,7 @@ async def build_simulator_environment(
         money_inventory=MoneyInventoryRepository(database),
         transactions=TransactionRepository(database),
         journal=SQLiteTransactionJournal(database),
+        device_faults=DeviceFaultLogRepository(database),
         device_settings=DeviceSettingsRepository(database),
         applied_config=AppliedConfigRepository(database),
         operational_events=OperationalEventRepository(database),

@@ -16,6 +16,8 @@ from flower_vending.runtime.bootstrap import (
     BootstrapReport,
     build_simulator_environment,
     discover_project_root,
+    read_runtime_events,
+    read_runtime_status,
     validate_config_file,
 )
 from flower_vending.simulators.scenarios.catalog import run_default_scenario_suite
@@ -50,6 +52,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     diagnostics_parser = subparsers.add_parser("diagnostics", help="Start simulator runtime and print diagnostics.")
     add_config_argument(diagnostics_parser)
+
+    status_parser = subparsers.add_parser("status", help="Read persisted machine status from SQLite.")
+    add_config_argument(status_parser)
+
+    events_parser = subparsers.add_parser("events", help="Read recent persisted events from SQLite.")
+    add_config_argument(events_parser)
+    events_parser.add_argument(
+        "--limit",
+        type=_positive_int,
+        default=50,
+        help="Maximum number of recent events to render.",
+    )
 
     service_parser = subparsers.add_parser("service", help="Enter service mode and print a service snapshot.")
     add_config_argument(service_parser)
@@ -137,6 +151,10 @@ def main(argv: list[str] | None = None) -> int:
         return _command_validate_config(args)
     if args.command == "diagnostics":
         return asyncio.run(_command_diagnostics(args))
+    if args.command == "status":
+        return _command_status(args)
+    if args.command == "events":
+        return _command_events(args)
     if args.command == "service":
         return asyncio.run(_command_service(args))
     if args.command == "simulator-runtime":
@@ -148,6 +166,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "dbv300sd-serial-smoke":
         return asyncio.run(_command_dbv300sd_serial_smoke(args, parser))
     parser.error(f"unsupported command: {args.command}")
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer") from exc
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
 
 
 def _command_validate_config(args: argparse.Namespace) -> int:
@@ -180,6 +208,24 @@ async def _command_diagnostics(args: argparse.Namespace) -> int:
         return 0
     finally:
         await environment.stop()
+
+
+def _command_status(args: argparse.Namespace) -> int:
+    payload = read_runtime_status(args.config)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(_format_status(payload))
+    return 0
+
+
+def _command_events(args: argparse.Namespace) -> int:
+    payload = read_runtime_events(args.config, limit=args.limit)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(_format_events(payload))
+    return 0
 
 
 async def _command_service(args: argparse.Namespace) -> int:
@@ -300,6 +346,77 @@ def _format_diagnostics(payload: dict[str, Any]) -> str:
         f"  - {item['name']}: {item['status']} ({item['mode']})"
         for item in payload["platform"]["extension_points"]
     )
+    return "\n".join(lines)
+
+
+def _format_status(payload: dict[str, Any]) -> str:
+    machine = payload["machine"]
+    if machine is None:
+        machine_lines = [
+            "Machine state: unknown (no persisted machine_status_projection row)",
+            "Sale blockers: unknown",
+        ]
+    else:
+        machine_lines = [
+            f"Machine state: {machine['machine_state']}",
+            f"Service mode: {machine['service_mode']}",
+            f"Exact change only: {machine['exact_change_only']}",
+            "Sale blockers: " + (", ".join(machine["sale_blockers"]) or "none"),
+            "Warnings: " + (", ".join(machine["warnings"]) or "none"),
+            f"Active transaction: {machine['active_transaction_id'] or 'none'}",
+            f"Cash sales allowed: {machine['allow_cash_sales']}",
+            f"Vending allowed: {machine['allow_vending']}",
+            f"Updated at: {machine['updated_at']}",
+        ]
+    money_inventory = payload["money_inventory"]
+    if money_inventory is None:
+        inventory_lines = ["Money inventory: not initialized"]
+    else:
+        inventory_lines = [
+            "Money inventory:",
+            f"  - currency: {money_inventory['currency_code']}",
+            f"  - available counts: {money_inventory['available_counts']}",
+            f"  - exact change only: {money_inventory['exact_change_only']}",
+            f"  - drift detected: {money_inventory['drift_detected']}",
+        ]
+    lines = [
+        f"Machine id: {payload['machine_id']}",
+        f"Database: {payload['database_path']}",
+        *machine_lines,
+        *inventory_lines,
+        f"Unresolved transactions: {len(payload['unresolved_transactions'])}",
+        f"Unresolved intents: {len(payload['unresolved_intents'])}",
+        f"Unacknowledged faults: {len(payload['unacknowledged_faults'])}",
+    ]
+    if payload["latest_applied_config"] is not None:
+        lines.append(f"Latest applied config: {payload['latest_applied_config']['applied_at']}")
+    if payload["hardware_warnings"]:
+        lines.append("Hardware warnings:")
+        lines.extend(f"  - {warning}" for warning in payload["hardware_warnings"])
+    return "\n".join(lines)
+
+
+def _format_events(payload: dict[str, Any]) -> str:
+    lines = [
+        f"Machine id: {payload['machine_id']}",
+        f"Database: {payload['database_path']}",
+        f"Recent events: {len(payload['events'])}",
+    ]
+    if not payload["events"]:
+        lines.append("  - none")
+        return "\n".join(lines)
+    for event in payload["events"]:
+        transaction_suffix = ""
+        if event.get("transaction_id"):
+            transaction_suffix = f" transaction={event['transaction_id']}"
+        lines.append(
+            "  - "
+            f"{event['occurred_at']} "
+            f"{event['source']} "
+            f"{event['event_type']} "
+            f"correlation={event['correlation_id']}"
+            f"{transaction_suffix}"
+        )
     return "\n".join(lines)
 
 
