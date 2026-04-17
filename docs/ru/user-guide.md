@@ -89,15 +89,14 @@ python -m flower_vending simulator-runtime --config config\examples\machine.simu
 python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
 ```
 
-Если хотите пользоваться готовыми Windows-скриптами:
+Для сброса demo state перед запуском интерфейса используйте прямую CLI-команду:
 
 ```powershell
-scripts\validate-config.bat
-scripts\run-diagnostics.bat
-scripts\run-service-mode.bat
-scripts\run-simulator-runtime.bat
-scripts\run-simulator-ui.bat
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
 ```
+
+Отдельные `.bat`/`.sh` wrappers для этих режимов больше не нужны: все
+повседневные команды идут через `python -m flower_vending ...`.
 
 ## 5. Как пройти обычную покупку
 

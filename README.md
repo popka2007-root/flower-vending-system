@@ -100,29 +100,31 @@ GitHub release automation находится в `.github/workflows/build-release
 Push tag вида `v0.1.4` собирает Windows/Linux artifacts и публикует их в
 GitHub Releases.
 
-Windows convenience scripts:
+## Unified CLI
+
+Use direct `python -m flower_vending ...` commands for simulator workflows.
+They work the same way on Windows and Linux, with only path separators changed
+for the host shell.
 
 ```powershell
-scripts\validate-config.bat
-scripts\run-simulator-runtime.bat
-scripts\run-diagnostics.bat
-scripts\run-service-mode.bat
-scripts\run-simulator-ui.bat
-scripts\reset-demo-and-run-ui.bat
+python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
+python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
+python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
+python -m flower_vending service --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
 ```
 
-Linux convenience scripts:
+Linux equivalent:
 
 ```bash
-./scripts/validate-config.sh
-./scripts/run-simulator-runtime.sh
-./scripts/run-diagnostics.sh
-./scripts/run-service-mode.sh
-./scripts/run-simulator-ui.sh
+python -m flower_vending validate-config --config config/examples/machine.simulator.yaml --prepare
+python -m flower_vending simulator-runtime --config config/examples/machine.simulator.yaml
+python -m flower_vending diagnostics --config config/examples/machine.simulator.yaml
+python -m flower_vending service --config config/examples/machine.simulator.yaml
+python -m flower_vending simulator-ui --config config/examples/machine.simulator.yaml
+python -m flower_vending simulator-ui --config config/examples/machine.simulator.yaml --reset-state
 ```
-
-Эти convenience scripts постепенно стоит заменять прямыми командами
-`python -m flower_vending ...`, если они не дают platform-specific пользы.
 
 ## Verification
 

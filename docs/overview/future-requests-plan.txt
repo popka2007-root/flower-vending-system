@@ -80,6 +80,8 @@ Flower Vending System - план будущих запросов
 
 Запрос 3: Cleanup scripts и launcher
 ------------------------------------
+Статус: выполнено.
+
 Цель:
 - Уменьшить дублирование .bat/.sh wrappers вокруг python -m flower_vending.
 
@@ -89,33 +91,18 @@ Flower Vending System - план будущих запросов
 - scripts/check_repository_hygiene.py
 - scripts/collect-linux-hardware-inventory.sh
 - scripts/collect-windows-hardware-inventory.ps1
-
-Уже перенесено в CLI:
-- scripts/reset-demo-and-run-ui.bat теперь вызывает
-  python -m flower_vending simulator-ui --reset-state.
-
-Удалять после миграции README/docs:
-- scripts/validate-config.bat
-- scripts/validate-config.sh
-- scripts/run-diagnostics.bat
-- scripts/run-diagnostics.sh
-- scripts/run-service-mode.bat
-- scripts/run-service-mode.sh
-- scripts/run-simulator-runtime.bat
-- scripts/run-simulator-runtime.sh
-- scripts/run-simulator-ui.bat
-- scripts/run-simulator-ui.sh
-
-Решить отдельно:
 - scripts/build-windows-release.bat
 - scripts/build-linux-release.sh
 - scripts/generate_project_documentation_docx.py
 
-Готовый промт:
-- "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
-  документацию на прямые команды python -m flower_vending, оставь только
-  packaging scripts и hardware inventory scripts, затем удали тонкие wrappers,
-  которые не дают platform-specific пользы. Запусти verify_project.py и ruff."
+Удалено после миграции README/docs на прямой CLI:
+- thin runtime wrappers для validate-config, diagnostics, service mode,
+  simulator-runtime, simulator-ui и reset demo state.
+
+Готовый промт для повторной проверки:
+- "Проверь, что README/docs больше не ссылаются на удалённые тонкие
+  shell/batch wrappers. Разрешены только packaging scripts и
+  hardware inventory scripts. Запусти verify_project.py, ruff и hygiene check."
 
 Запрос 4: Developer experience и CI
 -----------------------------------
@@ -259,16 +246,14 @@ Flower Vending System - план будущих запросов
 
 Приоритетный порядок
 --------------------
-1. Перевести README/docs с convenience wrappers на python -m flower_vending.
-2. Удалить deprecated thin wrapper scripts.
-3. Проверить sitecustomize.py и root flower_vending shim.
-4. Добавить status/events observability commands.
-5. Усилить packaging versioning и release docs.
-6. Добавить Windows/Linux simulator-safe CI matrix.
-7. Начать hardware inventory и bench validation planning.
-8. Улучшить simulator UI fault/service states.
-9. Описать product readiness acceptance criteria.
-10. Провести повторный docs link/hygiene audit после следующего крупного PR.
+1. Проверить sitecustomize.py и root flower_vending shim.
+2. Добавить status/events observability commands.
+3. Усилить packaging versioning и release docs.
+4. Добавить Windows/Linux simulator-safe CI matrix.
+5. Начать hardware inventory и bench validation planning.
+6. Улучшить simulator UI fault/service states.
+7. Описать product readiness acceptance criteria.
+8. Провести повторный docs link/hygiene audit после следующего крупного PR.
 
 Готовые промты для другого чата
 -------------------------------
@@ -277,11 +262,10 @@ Flower Vending System - план будущих запросов
   links живые, mapping старых путей полный, ADR остались отдельным слоем, а
   русскоязычные guides лежат в docs/ru/. Исправь только найденные рассинхроны."
 
-Промт B - cleanup scripts:
-- "Проверь README/docs на ссылки на scripts/*.bat и scripts/*.sh. Переведи
-  документацию на прямые команды python -m flower_vending, оставь только
-  packaging scripts и hardware inventory scripts, затем удали тонкие wrappers,
-  которые не дают platform-specific пользы. Запусти verify_project.py и ruff."
+Промт B - проверка после cleanup scripts:
+- "Проверь, что README/docs больше не ссылаются на удалённые тонкие
+  shell/batch wrappers. Разрешены только packaging scripts и
+  hardware inventory scripts. Запусти verify_project.py, ruff и hygiene check."
 
 Промт C - compatibility shims:
 - "Проверь python -m flower_vending из repo root, editable install и wheel-like

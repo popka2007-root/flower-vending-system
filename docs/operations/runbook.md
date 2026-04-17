@@ -116,23 +116,22 @@ python -m flower_vending service --config config\examples\machine.simulator.yaml
 python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
 ```
 
-## 5. Convenience Scripts
+## 5. Direct CLI Commands
 
-Windows:
+Use the unified Python entrypoint for runtime operations instead of thin shell
+wrappers:
 
-- `scripts\validate-config.bat`
-- `scripts\run-simulator-runtime.bat`
-- `scripts\run-diagnostics.bat`
-- `scripts\run-service-mode.bat`
-- `scripts\run-simulator-ui.bat`
+```powershell
+python -m flower_vending validate-config --config config\examples\machine.simulator.yaml --prepare
+python -m flower_vending simulator-runtime --config config\examples\machine.simulator.yaml
+python -m flower_vending diagnostics --config config\examples\machine.simulator.yaml
+python -m flower_vending service --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml
+python -m flower_vending simulator-ui --config config\examples\machine.simulator.yaml --reset-state
+```
 
-Linux:
-
-- `./scripts/validate-config.sh`
-- `./scripts/run-simulator-runtime.sh`
-- `./scripts/run-diagnostics.sh`
-- `./scripts/run-service-mode.sh`
-- `./scripts/run-simulator-ui.sh`
+The remaining shell/batch scripts are reserved for packaging and hardware
+inventory tasks where the host platform matters.
 
 ## 6. UI Scenarios You Can Walk Through
 
