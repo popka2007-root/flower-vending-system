@@ -1,473 +1,398 @@
-# Full Hardware Replacement Plan
+# Полный план замены железа
 
-Date: 2026-04-23
+Дата: 2026-04-23
 
-This document is the "stop trying to reverse-engineer the old cabinet" plan for
-the flower vending machine. The goal is to replace the unknown ATmega relay
-board and undocumented wiring with a maintainable cabinet architecture that can
-be driven by `flower-vending-system`.
+Документ описывает не восстановление старой самодельной проводки, а замену
+непонятной шкафной автоматики на нормальную, проверяемую архитектуру. Старую
+плату на ATmega32A не считаем надежным контроллером, потому что по ней нет
+схемы, прошивки, карты разъемов и нормального журнала изменений.
 
-The plan assumes:
-
-- the old PC/control board context is unreliable or lost;
-- the existing cabinet, screen, DBV bill validator, printer, motors, window,
-  cooling and power hardware may be reused only after bench tests;
-- the old ATmega32A relay board is not trusted as a production controller;
-- the software repository is a target baseline, not proof of the old wiring.
-
-## Recommended Direction
-
-Use a normal PC for the kiosk UI and vending application, and use DIN-rail
-industrial I/O modules for motors, sensors, window and cooling:
+Главная идея:
 
 ```text
-PC running flower-vending-system
-  |-- USB/RS-232 or PCIe COM card --> JCM DBV-300-SD bill validator
-  |-- USB                         --> Custom VKP80 receipt printer
-  |-- USB/RS-485 isolated adapter --> Modbus RTU I/O modules
-                                      |-- relay outputs
-                                      |-- dry-contact inputs
-                                      |-- temperature module
+ПК с flower-vending-system
+  |-- RS-232 / COM --> купюроприемник JCM DBV-300-SD
+  |-- USB          --> чековый принтер Custom VKP80
+  |-- USB-RS485    --> Modbus RTU модули ввода-вывода на DIN-рейке
+                       |-- релейные выходы
+                       |-- входы концевиков и датчиков
+                       |-- температура
 ```
 
-Recommended control stack:
+Так мы перестаем гадать, что делает старая плата, и получаем железо, которое
+можно проверить с компьютера, описать в конфиге и обслуживать через понятные
+модули.
 
-1. PC with Windows 10/11 or Debian Linux.
-2. Isolated USB-to-RS485 adapter.
-3. Two Wiren Board `WB-MR6C v.3` relay/input modules.
-4. One Wiren Board `WB-M1W2` 1-Wire temperature module, or an equivalent
-   Modbus temperature module.
-5. 24 VDC control power, DIN-rail fuses, terminals, E-stop and contactors.
+## Короткий вывод
 
-Why this route:
+Рекомендуемый путь для этого автомата:
 
-- no custom microcontroller firmware is needed for basic I/O;
-- Modbus RTU is easy to test from a PC and from Python;
-- relay modules have terminals, status LEDs and documented registers;
-- inputs and outputs can be mapped explicitly in YAML config;
-- the old unknown relay board can be removed from the critical path.
+1. Оставить ПК как верхний уровень: UI, логика продаж, журнал, база, платежная
+   логика.
+2. DBV-300-SD подключать напрямую к ПК по RS-232, если он проходит стендовые
+   тесты.
+3. Принтер Custom VKP80 подключать по USB, если он живой.
+4. Старую ATmega32A-релейную плату убрать из критического контура.
+5. Моторы, окно выдачи, датчики, дверь, температура и разрешение охлаждения
+   завести на Modbus RTU модули ввода-вывода.
+6. Компрессор/охлаждение не вешать напрямую на маленькое реле. Охлаждением
+   должен заниматься холодильный контроллер и контактор, а приложение только
+   мониторит температуру и блокирует продажи при аварии.
+7. Аварийный стоп должен физически снимать питание с исполнительных механизмов,
+   а не просто отправлять сигнал в программу.
+8. Payout/сдачу не делать первым этапом. Это самая рискованная часть по деньгам,
+   застреваниям и спорным состояниям. MVP лучше запускать без сдачи или с
+   безналом.
 
-## Architectures Compared
+## Почему не Arduino как финальный вариант
 
-| Option | Use when | Pros | Cons | Recommendation |
+Arduino Mega можно использовать для дешевого стенда. Но для боевого шкафа лучше
+не строить все на голой Arduino и китайских релейных платах:
+
+- много 24 В и 220 В цепей;
+- есть моторы, окно, компрессор, платежи;
+- нужны нормальные клеммы, предохранители, маркировка, безопасные состояния;
+- нужно обслуживание через год, когда никто не помнит, какой провод куда шел.
+
+Arduino годится, если бюджет совсем минимальный и есть время писать прошивку.
+Но основной рекомендуемый вариант: **ПК + RS485 Modbus I/O**.
+
+## Архитектуры
+
+| Вариант | Когда брать | Плюсы | Минусы | Вывод |
 | --- | --- | --- | --- | --- |
-| PC + Wiren Board Modbus I/O | You want maintainable replacement with reasonable cost | DIN rail, documented, Modbus, no firmware | More expensive than Arduino | Best default |
-| PC + OVEN PR205/Mx110/Mx210 | You want Russian industrial PLC ecosystem | Industrial, Modbus TCP/RTU, good support | Need PLC logic or more Modbus work | Good industrial alternative |
-| PC + CONTROLLINO | You want Arduino-like but more industrial | Arduino-compatible, 12/24 V automation I/O | Less common locally, more expensive | Good if available |
-| PC + Arduino Mega + relay boards | Lowest cost bench prototype | Cheap, many GPIO | Needs firmware, fragile wiring, weak safety unless built carefully | Bench only unless rebuilt professionally |
-| PC + Numato/Advantech USB relay module | Very quick USB relay control | Appears as COM/USB, no controller firmware | Inputs/sensors still separate, not ideal for cabinet-wide I/O | Useful for lab/testing |
+| ПК + Wiren Board WB-MR6C | Нужна нормальная замена старой платы | DIN-рейка, Modbus, реле, входы, документация | Дороже Arduino | Лучший вариант |
+| ПК + ОВЕН ПР205 / МВ110 / МУ110 | Хочется российская промышленная автоматика | Поддержка, Modbus, DIN-рейка | Нужно больше настройки ПЛК/Modbus | Хороший промышленный вариант |
+| ПК + CONTROLLINO | Нужен Arduino-подобный промышленный контроллер | 12/24 В автоматика, Arduino IDE | Доступность/цена | Нормально, если легко купить |
+| ПК + Arduino Mega | Минимальный бюджет | Дешево, много пинов | Прошивка, слабая промышленность, больше ручной работы | Только стенд или очень аккуратная сборка |
+| ПК + USB-релейная плата | Быстро щелкать реле с ПК | Очень просто | Мало датчиков, слабая шкафная архитектура | Для тестов |
 
-## Shopping List: Recommended Build
+## Рекомендуемая закупка
 
-Prices and availability change. Treat the links as product references and buy
-from a supplier that can deliver genuine parts to your location.
+Цены ниже ориентировочные на 2026-04-23. Они могут отличаться по региону,
+наличию и курсу. Для бюджетирования используй не нижнюю границу, а середину или
+верхнюю границу.
 
-### Core PC And Communications
+### Минимальный стенд на столе
 
-| Qty | Item | Recommended examples | Notes |
-| ---: | --- | --- | --- |
-| 1 | PC or mini-PC | Any reliable Windows 10/11 or Debian-capable PC, 8 GB RAM, SSD 256 GB+ | Reuse existing PC if stable; otherwise use a fanless industrial mini-PC if budget allows. Advantech has fanless embedded PCs with COM options. |
-| 1 | RS-232 ports for DBV/payout | Existing WCH PCIe CH384 card or FTDI/Moxa USB-RS232 adapters | WCH CH384 is a PCIe quad UART chip; keep it if it works. |
-| 1 | Isolated USB-RS485 adapter | Waveshare industrial isolated USB-RS485/422, or Moxa UPort 1130I | Used for Modbus RTU I/O modules. Isolation is strongly preferred. |
-| 1 | Powered USB hub, industrial if possible | Any good powered hub | Useful for printer, RS485, RS232, service keyboard. |
+Это надо купить первым, чтобы доказать связь ПК -> RS485 -> реле -> вход.
+Никакого 220 В на этом этапе.
 
-Links:
+| Кол-во | Позиция | Цена за шт. | Сумма |
+| ---: | --- | ---: | ---: |
+| 1 | Wiren Board `WB-MR6C v.3`, 6 реле + 7 входов | 5 000 руб. | 5 000 |
+| 1 | Изолированный USB-RS485 адаптер, Waveshare или аналог | 2 000-12 000 руб. | 2 000-12 000 |
+| 1 | БП 24 В DIN, Mean Well `HDR-60-24` или аналог | 1 500-3 500 руб. | 1 500-3 500 |
+| 3 | Концевики/кнопки для теста | 200-800 руб. | 600-2 400 |
+| 1 | Лампа/маленькая катушка 24 В для теста реле | 300-1 000 руб. | 300-1 000 |
+| 1 | DIN-рейка, клеммы, провод, наконечники, маркировка | 3 000-8 000 руб. | 3 000-8 000 |
 
-- WCH CH384 product page: https://www.wch-ic.com/products/CH384.html
-- WCH CH38X driver page: https://www.wch-ic.com/downloads/CH38XDRV_ZIP.html
-- Waveshare isolated USB-RS485/422: https://www.waveshare.com/usb-to-rs485-422.htm
-- Moxa UPort 1130I isolated RS-422/485 adapter: https://www.moxa.com/en/products/industrial-edge-connectivity/usb-to-serial-converters-usb-hubs/usb-to-serial-converters/uport-1100-series/uport-1130i
-- Advantech fanless embedded PCs: https://buy.advantech.com/embedded-series/compact-embedded-computers/dhtml-1614.htm
+Итого минимальный стенд: **12 400-31 900 руб.**
 
-### Modbus I/O
+Если сразу добавить температуру:
 
-| Qty | Item | Recommended examples | Purpose |
-| ---: | --- | --- | --- |
-| 2 | Relay + input module | Wiren Board `WB-MR6C v.3` | 12 relay outputs and 14 dry-contact inputs total. |
-| 1 | 1-Wire temperature module | Wiren Board `WB-M1W2` | Read DS18B20 chamber/evaporator sensors over Modbus. |
-| 2-3 | DS18B20 waterproof probes | Genuine Maxim/Analog Devices or decent probe assemblies | Chamber temperature, evaporator temperature, optional ambient. |
-| optional | Extra input module | OVEN `MV110` / `MV210`, or another `WB-MR6C` | Add more slot sensors if needed. |
-| optional | Extra output module | OVEN `MU110` / `MU210`, or another `WB-MR6C` | Add more motors/lamps/locks. |
+| Кол-во | Позиция | Цена за шт. | Сумма |
+| ---: | --- | ---: | ---: |
+| 1 | Wiren Board `WB-M1W2 v.3`, 1-Wire -> Modbus | 1 580 руб. | 1 580 |
+| 2-3 | DS18B20 датчики температуры | 500-1 500 руб. | 1 000-4 500 |
 
-Links:
+Стенд с температурой: **15 000-38 000 руб.**
+
+### Рабочая замена шкафной автоматики без замены DBV/принтера/ПК
+
+Это вариант, если старый ПК, купюроприемник и принтер остаются, а меняется
+старая ATmega32A-релейная плата и шкафная автоматика.
+
+| Кол-во | Позиция | Цена за шт. | Сумма |
+| ---: | --- | ---: | ---: |
+| 2 | `WB-MR6C v.3` | 5 000 руб. | 10 000 |
+| 1 | `WB-M1W2 v.3` | 1 580 руб. | 1 580 |
+| 3 | DS18B20 | 500-1 500 руб. | 1 500-4 500 |
+| 1 | Изолированный USB-RS485 | 2 000-12 000 руб. | 2 000-12 000 |
+| 1 | БП 24 В DIN | 1 500-3 500 руб. | 1 500-3 500 |
+| 1 | БП 12 В для DBV, если старый не используем | 1 500-4 000 руб. | 1 500-4 000 |
+| 1 | БП 24 В для принтера, если старый не используем | 2 000-5 000 руб. | 2 000-5 000 |
+| 8-12 | Концевики/датчики двери/окна/слотов | 500-2 000 руб. | 4 000-24 000 |
+| 1-2 | Оптический датчик выдачи/забора | 1 000-3 000 руб. | 1 000-6 000 |
+| 1 | Аварийная кнопка E-stop | 1 500-4 000 руб. | 1 500-4 000 |
+| 1 | Реле безопасности E-stop | 12 000-35 000 руб. | 12 000-35 000 |
+| 2-4 | Контакторы/промежуточные реле | 1 500-4 000 руб. | 3 000-16 000 |
+| 1 | Холодильный контроллер, если старого нет/не доверяем | 6 000-18 000 руб. | 6 000-18 000 |
+| 1 | Клеммы, предохранители, держатели, автоматы DC, кабель-канал, маркировка | 15 000-35 000 руб. | 15 000-35 000 |
+| 1 | Снабберы/варисторы/диоды/мелочевка защиты | 2 000-6 000 руб. | 2 000-6 000 |
+
+Итого без нового ПК, DBV и принтера: **64 580-210 580 руб.**
+
+Реалистично закладывать: **100 000-160 000 руб.**
+Нижняя граница получится только если часть питания, датчиков, клемм и защиты уже
+есть и ее можно безопасно reuse.
+
+### Если менять ПК
+
+| Вариант | Сумма |
+| --- | ---: |
+| Б/у офисный ПК/мини-ПК с SSD | 10 000-25 000 руб. |
+| Новый обычный mini-PC N100 8/256 или 16/512 | 22 000-45 000 руб. |
+| Промышленный fanless mini-PC с COM/RS485 | 35 000-90 000+ руб. |
+
+Практичный вариант: **новый mini-PC N100 за 25 000-45 000 руб.** + USB/COM
+адаптеры. Промышленный ПК лучше, но дороже.
+
+### Если менять принтер
+
+Если существующий Custom VKP80 живой, его лучше оставить.
+
+| Вариант | Сумма |
+| --- | ---: |
+| Б/у/после обслуживания Custom VKP80II | 9 000-15 000 руб. |
+| Новый/складской Custom VKP80II/VKP80II SX | 22 000-33 000+ руб. |
+| Новый официальный/импортный VKP80II RX | может быть сильно дороже |
+
+Плюс БП 24 В: **2 000-5 000 руб.**
+
+### Если менять купюроприемник
+
+Если существующий JCM DBV-300-SD работает, не трогать. Новый или б/у DBV
+дорогой, и еще нужна настройка под рубли/протокол.
+
+| Вариант | Сумма |
+| --- | ---: |
+| Б/у DBV-300/аналог после обслуживания | 15 000-40 000 руб. |
+| Импортный JCM DBV-300 ID003, ориентир $325 | примерно 30 000-45 000 руб. без доставки/пошлин |
+| Новый/гарантийный валидатор у поставщика | 40 000-80 000+ руб. |
+
+Плюс БП 12 В и RS-232 кабель/адаптер: **3 000-10 000 руб.**
+
+### Если нужна сдача / payout
+
+Это самая неприятная часть. Она дорогая и сложная программно.
+
+| Вариант | Сумма |
+| --- | ---: |
+| MDB монетоприемник с выдачей сдачи, например ICT CC6100M | около 45 000 руб. |
+| Б/у MDB changer, зависит от состояния | 20 000-60 000 руб. |
+| MDB-USB/MDB-RS232 интерфейс | 15 000-40 000 руб. ориентировочно |
+| Крепеж, жгуты, питание, касса/канал сдачи | 5 000-25 000 руб. |
+
+Итого по сдаче: **60 000-130 000 руб.**
+Если без сдачи можно жить, на первом этапе ее лучше не делать.
+
+### Если нужен безнал
+
+| Вариант | Сумма |
+| --- | ---: |
+| Nayax VPOS Touch, ориентир $399 | примерно 37 000-50 000 руб. за железо |
+| Доставка/подключение/кабели/договор | зависит от поставщика |
+| Комиссии/абонентка | выяснять у оператора платежей |
+
+Безнал может быть проще, чем payout, но зависит от договора, юрлица, эквайринга
+и поддержки в РФ/твоем регионе.
+
+## Итоговые бюджеты
+
+| Сценарий | Что входит | Оценка |
+| --- | --- | ---: |
+| Только стенд | 1 релейный модуль, RS485, БП, клеммы, тестовые входы | 12 000-32 000 руб. |
+| Стенд с температурой | То же + WB-M1W2 + DS18B20 | 15 000-38 000 руб. |
+| Замена шкафной автоматики | 2 релейных модуля, датчики, БП, безопасность, клеммы, охлаждение | 100 000-160 000 руб. реалистично |
+| Замена автоматики + новый ПК | Предыдущий вариант + mini-PC | 125 000-220 000 руб. |
+| Плюс замена принтера | Добавить VKP80 | +11 000-38 000 руб. |
+| Плюс замена DBV | Добавить купюроприемник | +30 000-80 000 руб. |
+| Плюс payout/сдача | MDB changer + интерфейс + механика | +60 000-130 000 руб. |
+| Полностью почти все новое | ПК, автоматика, принтер, DBV, payout, безопасность | 250 000-500 000 руб. |
+| Полностью новое + безнал + работа электрика | Все выше + платежный терминал + монтаж | 350 000-650 000 руб. |
+
+Мой честный бюджетный совет:
+
+- первый заказ: **15 000-38 000 руб.** на стенд;
+- потом шкафная автоматика: готовить **100 000-160 000 руб.**;
+- payout и безнал не покупать до тех пор, пока моторы/окно/датчики не работают
+  стабильно.
+
+## Ссылки на ключевые позиции
+
+### Управление и I/O
 
 - Wiren Board `WB-MR6C v.3`: https://wirenboard.com/ru/product/WB-MR6C_v3/
-- `WB-MR6C v.3` manual/wiki: https://wiki.wirenboard.com/wiki/WB-MR6C_v.3_Modbus_Relay_Modules
-- Wiren Board `WB-M1W2` 1-Wire temperature module: https://wiki.wirenboard.com/wiki/index.php?title=WB-M1W2_1-Wire_to_Modbus_Temperature_Measurement_Module/en
-- DS18B20 datasheet reference: https://www.digikey.com/htmldatasheets/production/1668/0/0/1/ds18b20z-t-r.html
-- OVEN PR205: https://owen.ru/product/pr205
-- OVEN MV110 input modules: https://owen.ru/product/moduli_diskretnogo_vvoda_s_interfejsom_rs_485
-- OVEN MU110 output modules: https://owen.ru/product/moduli_diskretnogo_vivoda_s_interfejsom_rs_485
-- OVEN MU210 Ethernet output modules: https://owen.ru/product/moduli_diskretnogo_vivoda_ethernet
+- Прайс Wiren Board: https://wirenboard.com/ru/catalog/pricelist/
+- Wiren Board `WB-M1W2 v.3`: https://wirenboard.com/ru/product/WB-M1W2/
+- Документация `WB-MR6C v.3`: https://wiki.wirenboard.com/wiki/WB-MR6C_v.3_Modbus_Relay_Modules
+- Документация `WB-M1W2`: https://wiki.wirenboard.com/wiki/WB-M1W2_v.3_1-Wire_to_Modbus_Temperature_Measurement_Module
+- ОВЕН ПР205: https://owen.ru/product/pr205
+- ОВЕН МВ110 входы: https://owen.ru/product/moduli_diskretnogo_vvoda_s_interfejsom_rs_485
+- ОВЕН МУ110 выходы: https://owen.ru/product/moduli_diskretnogo_vivoda_s_interfejsom_rs_485
 
-### Power And Cabinet Parts
+### Связь
 
-| Qty | Item | Recommended examples | Notes |
-| ---: | --- | --- | --- |
-| 1 | 24 VDC DIN power supply | Mean Well `HDR-60-24` or larger | Main control voltage for relays/sensors/contactors. |
-| 1 | 5 VDC DIN power supply | Mean Well `HDR-15-5` | Only if using 5 V logic, USB relay boards or LEDs. |
-| 1 | 12 VDC supply | 12 V, 3-5 A | For DBV-300-SD if the old 12 V supply is not reused. |
-| 1 | 24 VDC supply for printer | 24 V, at least printer-rated current | Custom VKP80 family is typically 24 VDC. Confirm exact model label. |
-| many | DIN rail terminal blocks | WAGO/Phoenix/IEK/etc. | Separate PE, N, L, 24V, 0V, sensor commons. |
-| many | Fuse terminals / DC breakers | Per output group | Every motor/actuator branch gets protection. |
-| 1 | RCD/RCBO and MCBs | Eaton/ABB/Schneider/etc. | Must be selected by an electrician for local mains. |
-| 1 | PE/ground bar | Any proper cabinet bar | Cabinet, door, PC chassis, power supplies and shield drains need PE. |
-| 1 | Wire duct, ferrules, labels | Any cabinet wiring kit | Do not build the new panel without labels. |
+- WCH CH384 PCIe quad UART: https://www.wch-ic.com/products/CH384.html
+- WCH CH38X driver: https://www.wch-ic.com/downloads/CH38XDRV_ZIP.html
+- Waveshare isolated USB-RS485/422: https://www.waveshare.com/usb-to-rs485-422.htm
+- Moxa UPort 1130I: https://www.moxa.com/en/products/industrial-edge-connectivity/usb-to-serial-converters-usb-hubs/usb-to-serial-converters/uport-1100-series/uport-1130i
 
-Links:
+### Питание и безопасность
 
-- Mean Well `HDR-60-24` Russia store reference: https://www.mean-well.ru/store/HDR-60-24/
-- Mean Well `HDR-15` series: https://www.meanwell.co.uk/power-supplies/din-rail-power-supplies/hdr-15-series
-- Mean Well HDR DIN rail installation manual: https://www.meanwell.com/Upload/PDF/HDR-15/HDR%20DIN%20rail%20power%20supply.pdf
-
-### Safety And 220 V Switching
-
-| Qty | Item | Recommended examples | Purpose |
-| ---: | --- | --- | --- |
-| 1 | Emergency stop mushroom button | Schneider Harmony XB4/XB5 or equivalent | Human emergency stop input. |
-| 1 | Safety relay | Pilz PNOZ X/PNOZsigma or equivalent | E-stop should cut actuator power through safety contacts. |
-| 1+ | Contactors | Schneider/ABB/IEK contactors with correct coil voltage | Compressor, motor mains, grouped actuator power. |
-| many | RC snubbers / varistors | Match coil/load voltage | Protect relay contacts from inductive loads. |
-| many | Flyback diodes | For DC coils/solenoids | Across DC inductive loads, polarity correct. |
-
-Links:
-
-- Pilz PNOZ X safety relays: https://www.pilz.com/en-US/products/relay-modules/safety-relays-protection-relays/pnoz-x-safety-relays/0010000200700280fn/index.html
+- Mean Well `HDR-60-24`: https://www.mean-well.ru/store/HDR-60-24/
+- Mean Well HDR DIN manual: https://www.meanwell.com/Upload/PDF/HDR-15/HDR%20DIN%20rail%20power%20supply.pdf
+- Schneider emergency stop example: https://www.se.com/ww/products/US/en/products/ZB4BS844
 - Pilz safety relay overview: https://www.pilz.com/en-US/products/relay-modules/safety-relays-protection-relays
-- Schneider Harmony emergency stop example: https://www.se.com/ww/products/US/en/products/ZB4BS844
-- Eaton RCBO example: https://www.eaton.com/us/en-us/skuPage.EAD32BH30C-A.html
 
-### Payment And Receipt Hardware
+### Платежи и печать
 
-| Device | Recommended approach | Notes |
-| --- | --- | --- |
-| Bill validator | Keep existing JCM DBV-300-SD if it passes bench tests | Connect to PC over RS-232. Do not invent protocol frames. |
-| Printer | Keep existing Custom VKP80 if it prints reliably | Prefer USB. Confirm 24 V power and exact model label. |
-| Payout/change | Replace with a documented MDB changer/payout plus MDB-USB/MDB-RS232 interface, or remove cash change from MVP | Payout is the riskiest part of cash vending. |
-| Cashless | Prefer professional unattended terminal if business rules allow it | Nayax/Vendotek type systems use MDB/Pulse/etc. Contract/support matters. |
+- JCM DBV-30X manual: https://www.vend-resource.com/sites/default/files/JCM-OptiPay-DBV-30X-Series-Manual.pdf
+- Custom VKP80II RX: https://www.custom.biz/en_US/product/hardware/professional-printing-solutions/kiosk-receipt-printers/vkp80ii-sx
+- Qibixx MDB-USB: https://qibixx.com/mdb-usb-interface/
+- Nayax VPOS Touch: https://shop.nayax.com/usa_en/products/vpos-touch.html
 
-Links:
-
-- JCM DBV-30X manual reference: https://www.vend-resource.com/sites/default/files/JCM-OptiPay-DBV-30X-Series-Manual.pdf
-- Custom VKP80II RX official page: https://www.custom.biz/en_US/product/hardware/professional-printing-solutions/kiosk-receipt-printers/vkp80ii-sx
-- Qibixx MDB-USB interface: https://qibixx.com/mdb-usb-interface/
-- Qibixx MDB technology overview: https://mdb.technology/
-- Nayax VPOS Touch: https://www.nayax.com/solution/vpos-touch/
-- Vendotek cashless payments: https://www.vendotek.eu/
-
-### Cooling
-
-Do not make the PC or Python app the only thing protecting flowers from a bad
-temperature condition. Cooling should have an independent refrigeration
-controller, and the PC should monitor it and optionally permit/disable operation.
-
-Recommended:
-
-- keep or install a refrigeration controller such as Eliwell IDplus, Carel Easy,
-  Dixell XR series, or OVEN temperature controller;
-- the vending software reads chamber temperature separately;
-- the vending software blocks sales on critical temperature;
-- compressor switching is done by refrigeration controller/contactor, not by a
-  small hobby relay.
-
-Links:
+### Охлаждение
 
 - Eliwell IDplus 974: https://www.eliwell.eu/en/single-stage-controller-for-refrigeration-idplus-974-1221.html
-- Carel Easy refrigeration controllers: https://www.carel.com/product/easy
-- OVEN TRM202 reference: https://insat.ru/products/regtrm202/
+- Carel Easy: https://www.carel.com/product/easy
+- ОВЕН ТРМ202: https://insat.ru/products/regtrm202/
 
-## Suggested I/O Map
+## Предлагаемая карта входов и выходов
 
-This map assumes two `WB-MR6C v.3` modules on one RS-485 bus.
+Два модуля `WB-MR6C v.3` дают 12 реле и 14 входов.
 
-### Relay Outputs
+### Реле
 
-| Module | Relay | Name | Function | Electrical note |
-| --- | ---: | --- | --- | --- |
-| R1 | K1 | `slot_A1` | Vend motor/actuator A1 | Low-voltage DC preferred. |
-| R1 | K2 | `slot_A2` | Vend motor/actuator A2 | Fuse each slot. |
-| R1 | K3 | `slot_B1` | Vend motor/actuator B1 | Add flyback diode/snubbers. |
-| R1 | K4 | `slot_B2` | Vend motor/actuator B2 | Do not exceed relay/load rating. |
-| R1 | K5 | `slot_C1` | Vend motor/actuator C1 | Confirm actual motor voltage. |
-| R1 | K6 | `slot_C2` | Vend motor/actuator C2 | Confirm current under stall. |
-| R2 | K1 | `window_open` | Open delivery window | Interlocked with `window_close`. |
-| R2 | K2 | `window_close` | Close delivery window | Limit switch must also stop motion. |
-| R2 | K3 | `cooling_permit` | Permit cooling / contactor coil | Do not directly switch compressor. |
-| R2 | K4 | `light` | Cabinet/product lighting | Optional. |
-| R2 | K5 | `fan` | Circulation fan | Optional. |
-| R2 | K6 | `spare_alarm` | Alarm/beacon/spare | Leave spare if possible. |
+| Модуль | Реле | Имя | Назначение |
+| --- | ---: | --- | --- |
+| R1 | K1 | `slot_A1` | выдача ячейки A1 |
+| R1 | K2 | `slot_A2` | выдача ячейки A2 |
+| R1 | K3 | `slot_B1` | выдача ячейки B1 |
+| R1 | K4 | `slot_B2` | выдача ячейки B2 |
+| R1 | K5 | `slot_C1` | выдача ячейки C1 |
+| R1 | K6 | `slot_C2` | выдача ячейки C2 |
+| R2 | K1 | `window_open` | открыть окно выдачи |
+| R2 | K2 | `window_close` | закрыть окно выдачи |
+| R2 | K3 | `cooling_permit` | разрешение охлаждения / катушка контактора |
+| R2 | K4 | `light` | подсветка |
+| R2 | K5 | `fan` | вентилятор циркуляции |
+| R2 | K6 | `spare_alarm` | аварийный маяк/резерв |
 
-### Digital Inputs
+### Входы
 
-| Module | Input | Name | Function | Fail-safe preference |
-| --- | ---: | --- | --- | --- |
-| R1 | I1 | `service_door_closed` | Service door state | Normally closed loop. |
-| R1 | I2 | `estop_ok` | Safety relay feedback | Normally closed loop. |
-| R1 | I3 | `window_open_limit` | Window open limit | Direct limit switch. |
-| R1 | I4 | `window_closed_limit` | Window closed limit | Direct limit switch. |
-| R1 | I5 | `pickup_present` | Product/pickup optical sensor | Depends on sensor type. |
-| R1 | I6 | `home_position` | Carousel/home position | Normally closed if possible. |
-| R1 | I7 | `leak_or_temp_alarm` | External alarm input | Normally closed if possible. |
-| R2 | I1 | `inventory_A1` | Product present A1 | Optional for MVP. |
-| R2 | I2 | `inventory_A2` | Product present A2 | Optional for MVP. |
-| R2 | I3 | `inventory_B1` | Product present B1 | Optional for MVP. |
-| R2 | I4 | `inventory_B2` | Product present B2 | Optional for MVP. |
-| R2 | I5 | `inventory_C1` | Product present C1 | Optional for MVP. |
-| R2 | I6 | `inventory_C2` | Product present C2 | Optional for MVP. |
-| R2 | I7 | `payout_fault` | Payout/changer fault input | Only after payout model is selected. |
+| Модуль | Вход | Имя | Назначение |
+| --- | ---: | --- | --- |
+| R1 | I1 | `service_door_closed` | сервисная дверь закрыта |
+| R1 | I2 | `estop_ok` | цепь аварийного стопа исправна |
+| R1 | I3 | `window_open_limit` | окно полностью открыто |
+| R1 | I4 | `window_closed_limit` | окно полностью закрыто |
+| R1 | I5 | `pickup_present` | товар в зоне выдачи / клиент забрал |
+| R1 | I6 | `home_position` | домашняя позиция механизма |
+| R1 | I7 | `external_alarm` | авария холодильника/протечка/резерв |
+| R2 | I1 | `inventory_A1` | товар есть в A1 |
+| R2 | I2 | `inventory_A2` | товар есть в A2 |
+| R2 | I3 | `inventory_B1` | товар есть в B1 |
+| R2 | I4 | `inventory_B2` | товар есть в B2 |
+| R2 | I5 | `inventory_C1` | товар есть в C1 |
+| R2 | I6 | `inventory_C2` | товар есть в C2 |
+| R2 | I7 | `payout_fault` | ошибка сдачи, если payout будет |
 
-### Temperature
+## Схемы подключения
 
-| Sensor | Name | Placement | Purpose |
-| --- | --- | --- | --- |
-| T1 | `chamber_temperature` | Product chamber air | Sale blocker and status display. |
-| T2 | `evaporator_temperature` | Evaporator/cooling coil | Cooling diagnostics. |
-| T3 | `ambient_temperature` | Electronics area | Optional cabinet health. |
+Это логические схемы. 220 В, PE, автоматы, УЗО, контакторы, компрессор и
+частотник должен подключать квалифицированный электрик.
 
-## Wiring Concepts
-
-Only work with power removed. Mains wiring, protective earth, RCD/RCBO,
-compressor contactors and inverter wiring should be done by a qualified
-electrician. The diagrams below describe design intent, not permission to touch
-live 220 V circuits.
-
-### RS-485 Bus
+### RS-485
 
 ```text
-PC USB
-  -> isolated USB-RS485 adapter
-       A+ -------------------- A+ on R1, A+ on R2, A+ on temp module
-       B- -------------------- B- on R1, B- on R2, B- on temp module
-       GND/REF --------------- reference/common if required by module manual
-       shield ---------------- PE at one end only, usually cabinet side
+ПК USB
+  -> изолированный USB-RS485
+       A+ -------------- A+ R1, A+ R2, A+ температурного модуля
+       B- -------------- B- R1, B- R2, B- температурного модуля
+       GND/REF --------- общий провод, если требует документация модулей
+       SHIELD ---------- экран кабеля, на PE с одной стороны
 ```
 
-Rules:
+Правила:
 
-- use twisted pair for A/B;
-- terminate the bus at the physical ends if the run is long/noisy;
-- give every module a unique Modbus address;
-- label modules physically: `R1`, `R2`, `T1`;
-- configure a safe state on communication loss: motors off, window stop, cooling
-  policy decided separately.
+- витая пара для A/B;
+- уникальный адрес каждому модулю;
+- на концах длинной линии ставить терминаторы по документации;
+- реле по потере связи должны уходить в безопасное состояние: моторы off,
+  окно stop, охлаждение по отдельной политике.
 
-### Low-Voltage DC Motor Or Solenoid Through Relay
+### DC мотор или соленоид через реле
 
 ```text
-+24 VDC -> fuse -> relay COM
-relay NO -> load +
-load -   -> 0 VDC
-
-Across DC load:
-  diode or TVS/snubber, selected for the load and release-time requirements
++24 В -> предохранитель -> COM реле
+NO реле -> плюс нагрузки
+минус нагрузки -> 0 В
 ```
 
-Use this only when:
+Для DC катушек и соленоидов нужен диод/TVS. Для AC и индуктивных нагрузок
+нужны RC-снабберы/варисторы. Без защиты контакты реле будут гореть.
 
-- load voltage/current is known;
-- relay rating is enough for DC and inrush current;
-- a stalled motor cannot overheat or destroy the mechanism before timeout.
-
-### Delivery Window With Open/Close Directions
-
-Preferred:
+### Окно выдачи
 
 ```text
-R2 K1 -> OPEN command to motor driver/contactor
-R2 K2 -> CLOSE command to motor driver/contactor
-I3    -> open limit switch
-I4    -> closed limit switch
+R2 K1 -> команда OPEN
+R2 K2 -> команда CLOSE
+R1 I3 -> концевик "открыто"
+R1 I4 -> концевик "закрыто"
 ```
 
-Requirements:
+Требования:
 
-- `OPEN` and `CLOSE` must never energize at the same time;
-- there must be a software interlock in the Python adapter;
-- there should be a hardware/intermediate relay interlock if possible;
-- limit switches should stop motion physically, not only in software;
-- use the `WB-MR6C` curtain/shutter mode if it fits the actuator.
+- OPEN и CLOSE не должны включаться одновременно;
+- нужна программная блокировка;
+- желательно аппаратная блокировка;
+- концевики должны физически останавливать механизм или хотя бы отключать
+  направление через драйвер;
+- таймаут движения обязателен.
 
-### Cooling
+### Охлаждение
 
-Recommended design:
+Правильно:
 
 ```text
-Refrigeration controller -> compressor contactor -> compressor
-PC/Modbus I/O            -> cooling permit / alarm read / temperature read
+Холодильный контроллер -> контактор -> компрессор
+ПК/Modbus              -> температура, авария, разрешение продаж
 ```
 
-Do not do this as the only control:
+Неправильно:
 
 ```text
-PC -> USB -> relay -> compressor
+ПК -> USB -> маленькое реле -> компрессор
 ```
 
-The compressor has startup current, short-cycle protection requirements and
-safety implications. Use a real refrigeration controller and contactor.
+Компрессор имеет пусковой ток и требования по задержкам включения. Это задача
+холодильной автоматики, не Python-скрипта.
 
-### Emergency Stop
+### Аварийный стоп
 
-Bad:
+Плохо:
 
 ```text
-E-stop -> PC input only
+E-stop -> вход в ПК
 ```
 
-Good:
+Правильно:
 
 ```text
-E-stop button -> safety relay -> cuts actuator power contactor
+E-stop -> реле безопасности -> контактор питания механизмов
                          |
-                         +-> feedback input `estop_ok` to Modbus I/O
+                         +-> вход estop_ok в Modbus-модуль
 ```
 
-The app should know that E-stop is active, but it must not be the only thing
-stopping motors.
+Программа должна знать об аварии, но не должна быть единственной защитой.
 
-## Payment Strategy
+## Интеграция в проект
 
-There are three practical payment levels.
+В репозитории уже есть контракты устройств:
 
-### MVP: Cashless Or Exact Cash, No Change
+- `BillValidator`;
+- `ChangeDispenser`;
+- `MotorController`;
+- `CoolingController`;
+- `WindowController`;
+- `TemperatureSensor`;
+- `DoorSensor`;
+- `InventorySensor`;
+- `PositionSensor`.
 
-This is the fastest way to get the machine selling:
-
-- disable payout/change;
-- accept only card/QR/cashless, or exact cash if legally and operationally OK;
-- vend only after confirmed payment;
-- print receipt if required.
-
-Pros:
-
-- no payout liability;
-- far fewer jams and ambiguous states;
-- much easier software.
-
-Cons:
-
-- may reduce customer convenience;
-- legal/fiscal/payment integration depends on your business setup.
-
-### Cash With Existing DBV, No Payout
-
-Use the existing JCM DBV-300-SD if bench-confirmed:
-
-- DBV connects directly to the PC over RS-232;
-- the app must disable/enable acceptance;
-- bill events must be confirmed using documented DBV protocol or bench traces;
-- no guessed protocol bytes.
-
-This is acceptable only after real bill tests prove denominations, stacking,
-rejects and fault behavior.
-
-### Cash With Change/Payout
-
-Recommended replacement path:
-
-- use a documented MDB coin changer/payout/hopper system;
-- connect it through `Qibixx MDB-USB`, `MDB-RS232`, or another documented
-  vending payment interface;
-- implement and test payout accounting separately from product vending.
-
-Do not build payout from random relays and motors unless you are prepared to
-engineer cash accounting, jam detection, empty states and recovery.
-
-## Printer Strategy
-
-The Custom VKP80 family is suitable for vending/kiosk receipts and commonly has
-USB and RS-232 variants. The official page lists `RS232+USB`, drivers for
-Windows/Linux/Virtual COM and `24 Vdc` supply for VKP80II RX.
-
-Recommended:
-
-1. Power printer from a proper 24 V supply.
-2. Connect by USB first.
-3. Install official Custom driver/tooling.
-4. Print a Windows/Linux test page.
-5. Later add receipt printing from the app.
-
-If USB is unreliable, use RS-232 only after confirming cable pinout and printer
-settings.
-
-## Budget Arduino Alternative
-
-Use this only for bench work or if the cabinet is rebuilt carefully with proper
-isolation.
-
-Minimum:
-
-- Arduino Mega 2560;
-- 2x 8-channel opto-isolated relay modules;
-- opto-isolated 24 V input boards;
-- DS18B20 sensor;
-- 5 V DIN supply;
-- 12/24 V motor supply;
-- contactors/fuses/E-stop as above.
-
-Arduino Mega official specs list many I/O pins, which is why it is more suitable
-than ESP8266 for this job. But a bare Arduino board is not an industrial
-controller. It needs terminal shields, input conditioning, watchdog behavior and
-firmware.
-
-Links:
-
-- Arduino Mega 2560 Rev3: https://store-usa.arduino.cc/products/arduino-mega-2560-rev3
-- CONTROLLINO outputs overview: https://www.controllino.com/outputs/
-- Numato 8-channel USB relay module: https://numato.com/product/8-channel-usb-relay-module
-- Advantech USB-4761 USB relay/input module: https://www.advantech.com/emt/products/1-2MLKNO/USB-4761/mod_C1E301AB-CDC8-45C0-B610-6AEA44B544AE
-
-Arduino bench pin map if used:
-
-| Mega pin | Function |
-| ---: | --- |
-| D22-D27 | slot relays A1-C2 |
-| D28 | window open |
-| D29 | window close |
-| D30 | cooling permit |
-| D31 | light |
-| D34-D39 | door/window/pickup/home/E-stop status |
-| D40-D45 | inventory A1-C2 |
-| D46 | DS18B20 data with 4.7 kOhm pullup |
-
-PC-to-Arduino serial command sketch should be simple text:
-
-```text
-PING
-VEND A1
-WINDOW OPEN
-WINDOW CLOSE
-COOLING ON
-COOLING OFF
-READ TEMP
-READ INPUTS
-STOP
-```
-
-Responses:
-
-```text
-OK PONG
-OK VEND A1
-OK TEMP 4.2
-ERR TIMEOUT WINDOW_CLOSE
-ERR ESTOP
-```
-
-## Software Integration Plan
-
-The repository already has device contracts for:
-
-- bill validator;
-- change dispenser;
-- motor controller;
-- cooling controller;
-- window controller;
-- temperature sensor;
-- door sensor;
-- inventory sensor;
-- position sensor.
-
-Add a new adapter package such as:
+Нужно добавить пакет:
 
 ```text
 src/flower_vending/devices/modbus_io/
@@ -482,14 +407,14 @@ src/flower_vending/devices/modbus_io/
   temperature_sensor.py
 ```
 
-Recommended Python dependency:
+Зависимости:
 
 ```text
 pymodbus
 pyserial
 ```
 
-Example config shape:
+Пример будущего конфига:
 
 ```yaml
 devices:
@@ -502,7 +427,7 @@ devices:
       baudrate: 9600
       parity: N
       stopbits: 1
-      unit_outputs:
+      modules:
         R1:
           address: 1
           relays:
@@ -542,179 +467,133 @@ devices:
         evaporator_temperature: 2
 ```
 
-Adapter behavior:
+Поведение адаптера:
 
-- on startup, write all outputs OFF;
-- read E-stop, service door and window limits before allowing vend;
-- for `vend_slot(slot_id)`, pulse only the mapped relay, then turn it off;
-- if timeout/fault occurs, turn all motion outputs off and raise a device fault;
-- for window movement, enforce open/close interlock and check limit switches;
-- for temperature, read Modbus value and convert to Celsius;
-- log every command and physical confirmation.
+- при старте выключить все выходы;
+- перед продажей читать E-stop, дверь, температуру, окно;
+- `vend_slot(A1)` включает только одно реле на заданный импульс;
+- после импульса реле обязательно выключается;
+- при ошибке выключаются все выходы движения;
+- окно открывается/закрывается только с interlock;
+- все команды логируются.
 
-## Build Phases
+## Этапы запуска
 
-### Phase 1: Tabletop Bench, No 220 V Loads
+### Этап 1. Стенд
 
-Buy:
+Купить минимальный стенд. Проверить:
 
-- PC or laptop;
-- USB-RS485 adapter;
-- one `WB-MR6C v.3`;
-- 24 V supply;
-- 2-3 switches;
-- one small 24 V lamp or relay coil;
-- one DS18B20 + temperature module.
+1. ПК видит USB-RS485 как COM-порт.
+2. Modbus читает входы `WB-MR6C`.
+3. Modbus включает и выключает одно реле.
+4. Концевик меняет состояние входа.
+5. Температура читается с `WB-M1W2`.
 
-Test:
+### Этап 2. Новый щит автоматики
 
-- PC sees RS485 adapter;
-- Modbus can read module inputs;
-- Modbus can toggle one relay;
-- E-stop/status input appears;
-- temperature reads correctly;
-- Python prototype can toggle a relay and read input.
+Собрать DIN-панель:
 
-No cabinet. No motors. No compressor.
+- 24 В питание;
+- RS485 шина;
+- 2 релейных модуля;
+- клеммы входов;
+- клеммы выходов;
+- предохранители;
+- маркировка проводов.
 
-### Phase 2: Cabinet Low-Voltage Rewire
+Сначала подключить только низковольтные цепи.
 
-Install DIN rail panel:
+### Этап 3. Моторы и окно
 
-- 24 V power distribution;
-- RS-485 bus;
-- relay modules;
-- input terminals;
-- labels;
-- fuses.
+Для каждого мотора:
 
-Connect only low-voltage devices first:
+1. Узнать напряжение.
+2. Измерить/оценить ток.
+3. Подобрать предохранитель и способ коммутации.
+4. Проверить на отдельной кнопке/сервисной команде.
+5. Записать время нормального движения.
+6. Добавить таймаут в конфиг.
 
-- door switch;
-- window limit switches;
-- pickup sensor;
-- one test actuator or lamp.
+Для окна:
 
-### Phase 3: Motors And Window
+- отдельно проверить OPEN;
+- отдельно проверить CLOSE;
+- проверить оба концевика;
+- доказать, что OPEN и CLOSE не могут включиться одновременно.
 
-For each motor:
+### Этап 4. Принтер и DBV
 
-1. Confirm voltage and stall current.
-2. Select driver/relay/contactors.
-3. Add fuse.
-4. Add suppressor.
-5. Test from local manual switch or service command.
-6. Test from app.
-7. Record timing.
+Принтер:
 
-For window:
-
-- install open/close limit switches;
-- prove that open/close cannot energize together;
-- test obstruction/failure behavior;
-- only then enable customer flow.
-
-### Phase 4: Payment And Printer
-
-Printer:
-
-- install driver;
-- print test;
-- print app receipt later.
+- питание 24 В;
+- USB;
+- драйвер Custom;
+- тестовая печать.
 
 DBV:
 
-- power with correct 12 V supply;
-- connect RS-232;
-- confirm port;
-- run only known bench tools or documented commands;
-- verify real bill insert, reject, stack and fault behavior.
+- питание 12 В;
+- RS-232;
+- определить COM;
+- использовать только документированные команды или уже подтвержденные bench
+  traces;
+- проверить реальные купюры, reject, stack, fault.
 
-Payout:
+### Этап 5. Продажи
 
-- postpone unless the model and protocol are known;
-- if replacing, choose MDB payout/changer and bench it separately.
+Сначала включить режим:
 
-### Phase 5: Full Application Integration
+- без сдачи;
+- без payout;
+- с одной ячейкой;
+- с ручным контролем;
+- с полным логированием.
 
-Enable in config:
+Только после стабильной продажи одной ячейки добавлять остальные ячейки,
+платежные сценарии и возвраты.
 
-- simulator off;
-- DBV driver confirmed;
-- `modbus_io` motor/window/sensor/cooling drivers;
-- safety blockers for door, E-stop, temperature and inventory;
-- SQLite persistence and event logs.
+## Что купить первым
 
-Run:
-
-- startup self-test;
-- service-mode actuator tests;
-- one-slot vend test;
-- window open/close test;
-- pickup timeout test;
-- power-loss/restart test.
-
-## Minimal First Purchase
-
-If you want to spend the least money before committing:
+Первый заказ:
 
 1. `WB-MR6C v.3`.
-2. Isolated USB-RS485 adapter.
+2. Изолированный USB-RS485.
 3. Mean Well `HDR-60-24`.
-4. DIN rail + terminal blocks + ferrules.
-5. 3 simple limit switches.
-6. One 24 V lamp or small relay coil for testing.
+4. DIN-рейка, клеммы, провод, наконечники.
+5. Три концевика.
+6. Лампа/катушка 24 В.
+7. Опционально: `WB-M1W2` и два DS18B20.
 
-This lets us prove the whole PC-to-Modbus-to-relay path without touching the
-old cabinet wiring.
+После этого можно написать и проверить `modbus_io` адаптер, не залезая в
+опасный старый шкаф.
 
-## First Physical Job
+## Что не делать
 
-Do this before buying the full pile:
+- Не подключать ПК к случайным контактам старой ATmega-платы.
+- Не коммутировать компрессор маленьким реле.
+- Не делать аварийный стоп только программным.
+- Не мешать 220 В и низковольтные провода в одном неразмеченном жгуте.
+- Не покупать payout до того, как заработают моторы/окно/датчики.
+- Не отправлять в DBV байты, которые не подтверждены документацией или bench
+  traces.
+- Не покупать все моторные драйверы, пока не известно напряжение и ток моторов.
 
-1. Decide whether the cabinet will use the Modbus/Wiren Board route or the
-   Arduino route.
-2. Buy only the minimal bench kit above.
-3. Build it on the table.
-4. Verify one relay and one input from the PC.
-5. Only after that, start cabinet rewiring.
+## Финальное решение
 
-## What Not To Do
-
-- Do not connect the PC directly to random old relay-board pins.
-- Do not switch compressor power with a small hobby relay.
-- Do not make E-stop software-only.
-- Do not mix 220 V and low-voltage wiring in the same loose harness.
-- Do not implement payout before the payout hardware is identified.
-- Do not send guessed DBV protocol bytes.
-- Do not buy all motors/drivers before measuring actual motor voltage/current.
-
-## Practical Buying Sources
-
-For Russia/CIS-style sourcing:
-
-- Wiren Board official shop for WB modules.
-- OVEN official shop or distributors for PR/MV/MU modules.
-- Mean Well Russia/distributors for power supplies.
-- Chip Dip, Platan, Terraelectronica, Promelec-type suppliers for terminals,
-  relays, contactors, Omron/Finder/Schneider parts.
-- Ozon/AliExpress only for bench-grade Arduino modules, not for final safety
-  components.
-- Refrigeration parts suppliers for Eliwell/Carel/Dixell controllers.
-- Vending/payment suppliers for MDB changers, Nayax/Vendotek/Qibixx hardware.
-
-## Decision
-
-For this machine, the recommended replacement is:
+Рекомендуемая конфигурация:
 
 ```text
-PC + existing/confirmed DBV + existing/confirmed VKP80 printer
-+ RS485 Modbus I/O cabinet based on WB-MR6C modules
-+ independent refrigeration controller
-+ professional E-stop/contactors/fusing
-+ no payout in MVP unless a documented MDB payout/changer is selected
+ПК
++ существующий DBV-300-SD, если пройдет тесты
++ существующий Custom VKP80, если пройдет тесты
++ RS485 Modbus I/O на WB-MR6C
++ WB-M1W2 для температуры
++ отдельный холодильный контроллер
++ E-stop через реле безопасности
++ контакторы, предохранители, клеммы, маркировка
++ без payout на первом запуске
 ```
 
-This gives the shortest path from a dead undocumented cabinet to a system that
-can be tested, logged, supported and eventually integrated with
-`flower-vending-system`.
+Это не самый дешевый путь, но он самый понятный и ремонтопригодный. Главная
+цель первого этапа: получить одну безопасную продажу одной ячейки с логами,
+датчиками и отключаемыми механизмами.
